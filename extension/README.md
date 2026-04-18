@@ -180,4 +180,6 @@ This isn't about stalking or surveillance. This is about showing that a privacy 
 
 ## Disclaimer
 
-This documents a design flaw in Instagram's story architecture. All testing was performed on the researcher's own account. This tool should not be used to stalk, harass, or violate anyone's privacy.
+I built this because I wanted something that actually works, to prove the point and see how far this goes. This is research. I'm not releasing this to cause harm, enable stalking, or mess with anyone's privacy. The goal is to document a real design flaw that affects 2 billion users and that Meta is about to monetize instead of fixing.
+
+All testing was performed on my own account. I'm publishing the code and the findings so people understand what the "seen" indicator actually is (and isn't). If you use this tool to harass, stalk, or violate someone's privacy, that's on you. That's not what this is for.
