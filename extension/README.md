@@ -46,6 +46,17 @@ Nobody pays $2/month for animated Superlikes. They pay to view without being see
 
 And this isn't new. Browser extensions doing the exact same thing have existed since [2019](https://github.com/haikov/instaghost). Seven years. Zero stars, zero attention, zero media coverage. The capability has been public for seven years and nobody connected the dots. Now Meta is packaging it as a premium feature and the tech press is covering it as innovation. It's not innovation. It's monetizing a design flaw that the security community documented years ago and that nobody outside of it ever noticed.
 
+## Prior art
+
+| Project | Year | Method | Still works? | Cache | Download | Deletion | Auto-fetch |
+|---------|------|--------|-------------|-------|----------|----------|------------|
+| [instaghost](https://github.com/haikov/instaghost) | 2019 | Blocks REST `/api/v1/stories/reel/seen` | Probably not | No | No | No | No |
+| [incognito-viewer](https://github.com/yizzycool/instagram-story-incognito-viewer) | 2023 | Blocks REST `/api/v1/stories/reel/seen` via `declarativeNetRequest` | Probably not | No | No | No | No |
+| [Greasyfork script](https://greasyfork.org/en/scripts/535035-instagram-anonymous-story-viewer) | ~2025 | Regex on `viewSeenAt` / `story_view` in XHR/fetch | Maybe | No | No | No | No |
+| **This extension** | 2026 | Blocks GraphQL `PolarisStoriesV3SeenMutation` via `webRequest` + `StreamFilter` | **Yes** | **Yes** | **Yes** | **Yes** | **Yes** |
+
+Every prior implementation does one thing: block the seen call. None identified the actual GraphQL mutation name. None cache content, download media, detect deletions, auto-fetch, extract doc_ids, or export metadata. They all target the old REST endpoint `/api/v1/stories/reel/seen` which Instagram migrated away from. They probably don't work anymore on the current web client.
+
 ## What this extension does
 
 I built a Firefox extension as a proof of concept. It does more than Instagram Plus for $0.
