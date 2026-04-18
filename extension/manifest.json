@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "IG Story Research",
+  "version": "0.4",
+  "description": "Privacy research - blocks seen receipts, caches stories locally",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "downloads",
+    "webRequest",
+    "webRequestBlocking",
+    "https://www.instagram.com/*",
+    "https://*.cdninstagram.com/*",
+    "https://*.fbcdn.net/*",
+    "https://static.cdninstagram.com/*"
+  ],
+  "content_scripts": [{
+    "matches": ["https://www.instagram.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_action": {
+    "default_popup": "popup.html"
+  }
+}

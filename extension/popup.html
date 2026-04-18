@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 400px; max-height: 600px; overflow-y: auto; font-family: monospace; font-size: 12px; padding: 10px; background: #1a1a1a; color: #e0e0e0; }
+    h2 { margin: 0 0 10px; font-size: 14px; color: #fff; }
+    .user { margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .username { font-weight: bold; color: #58a6ff; }
+    .item { margin: 4px 0 4px 10px; font-size: 11px; }
+    .deleted { color: #f85149; }
+    .cached { color: #8b949e; }
+    .media-link { color: #58a6ff; text-decoration: none; }
+    .media-link:hover { text-decoration: underline; }
+    button { background: #333; color: #fff; border: 1px solid #555; padding: 4px 8px; cursor: pointer; margin: 2px; font-size: 11px; }
+    button:hover { background: #444; }
+    .controls { margin-bottom: 10px; }
+    .empty { color: #8b949e; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h2>IG Story Cache</h2>
+  <div class="controls">
+    <button id="refresh">Refresh</button>
+    <button id="clear">Clear Cache</button>
+    <button id="export">Export JSON</button>
+  </div>
+  <div class="settings">
+    <label><input type="checkbox" id="autoFetch" checked> Auto-fetch</label>
+    <label>every <input type="number" id="interval" value="300" min="60" max="3600" style="width:50px;background:#333;color:#fff;border:1px solid #555;"> sec</label>
+    <button id="saveSettings">Save</button>
+  </div>
+  <div id="content"><span class="empty">No stories cached yet. Browse Instagram to start capturing.</span></div>
+  <script src="popup.js"></script>
+</body>
+</html>
