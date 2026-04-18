@@ -160,6 +160,14 @@ Instagram is about to charge $2/month for something that costs one line of JavaS
 - Extension is temporary in Firefox. Requires reload after restart.
 - CDN media URLs expire after hours. Downloaded files persist.
 
+## Why Mexico, Japan, and the Philippines
+
+Instagram Plus is being tested in Mexico, Japan, and the Philippines. Not the EU. Not the US. Countries with weaker privacy regulations.
+
+If Meta launched anonymous story viewing in the EU, it would be an implicit admission that the "seen" indicator was never enforced. Any data protection authority could use that as grounds for a GDPR complaint under Articles [25](https://gdpr-info.eu/art-25-gdpr/) and [32](https://gdpr-info.eu/art-32-gdpr/). By testing outside the EU, Meta avoids setting that precedent.
+
+But the flaw exists everywhere. Every EU user's "seen" indicator is just as broken as every Mexican user's. The only difference is that in Mexico, Meta is honest about it for $2/month. In the EU, they pretend it works.
+
 ## A note on intelligence use
 
 The asymmetric visibility feature (see who views your stories while being invisible when viewing theirs) is not just a privacy concern. It's an intelligence tool. Anyone conducting surveillance, social engineering, or HUMINT operations on Instagram can use this architecture to monitor targets without leaving traces, while simultaneously tracking who is monitoring them.
