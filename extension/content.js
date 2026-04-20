@@ -74,8 +74,44 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
+// Inject page-context script (MAIN world) for WebSocket interception
+function injectPageScript() {
+  const s = document.createElement("script");
+  s.src = browser.runtime.getURL("inject.js");
+  s.onload = () => s.remove();
+  (document.head || document.documentElement).appendChild(s);
+}
+
+// Forward settings to page context
+async function pushSettingsToPage() {
+  try {
+    const resp = await browser.runtime.sendMessage({ type: "getSettings" });
+    window.dispatchEvent(new CustomEvent("ig_research_settings", { detail: resp }));
+  } catch(_) {}
+}
+
+// Listen for log messages from inject.js
+window.addEventListener("ig_research_log", (e) => {
+  browser.runtime.sendMessage({ type: "injectLog", msg: e.detail });
+});
+
+injectPageScript();
+
 if (document.readyState === "complete") {
   init();
+  pushSettingsToPage();
 } else {
-  window.addEventListener("load", init);
+  window.addEventListener("load", () => {
+    init();
+    pushSettingsToPage();
+  });
 }
+
+// When settings change, forward to page context
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "pushSettings") {
+    window.dispatchEvent(new CustomEvent("ig_research_settings", { detail: msg.settings }));
+    sendResponse({ ok: true });
+  }
+  return true;
+});

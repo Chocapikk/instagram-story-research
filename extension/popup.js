@@ -256,6 +256,7 @@ async function loadSettings() {
     if (resp) {
       document.getElementById("blockSeen").checked = resp.blockSeen !== false;
       document.getElementById("blockDMRead").checked = resp.blockDMRead !== false;
+      document.getElementById("blockTyping").checked = resp.blockTyping !== false;
       document.getElementById("autoFetch").checked = resp.autoFetch !== false;
       document.getElementById("autoDownload").checked = resp.autoDownload !== false;
       if (resp.fetchInterval) document.getElementById("interval").value = resp.fetchInterval;
@@ -270,6 +271,7 @@ document.getElementById("saveSettings").addEventListener("click", async () => {
   const settings = {
     blockSeen: document.getElementById("blockSeen").checked,
     blockDMRead: document.getElementById("blockDMRead").checked,
+    blockTyping: document.getElementById("blockTyping").checked,
     autoFetch: document.getElementById("autoFetch").checked,
     autoDownload: document.getElementById("autoDownload").checked,
     fetchInterval: parseInt(document.getElementById("interval").value) || 300

@@ -18,6 +18,7 @@ const GALLERY_DOC_ID_FALLBACK = "25869747379387218";
 let settings = {
   blockSeen: true,
   blockDMRead: true,
+  blockTyping: true,
   autoFetch: true,
   autoDownload: true,
   fetchInterval: 300
@@ -507,8 +508,17 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     settings = { ...settings, ...msg.settings };
     browser.storage.local.set({ settings });
     restartAutoFetch();
+    // Push settings to page context (for WebSocket typing blocker)
+    browser.tabs.query({ url: "https://www.instagram.com/*" }).then(tabs => {
+      for (const tab of tabs) {
+        browser.tabs.sendMessage(tab.id, { type: "pushSettings", settings }).catch(_ => {});
+      }
+    });
     bglog("Settings saved:", settings);
     sendResponse({ ok: true });
+  }
+  if (msg.type === "injectLog") {
+    bglog("[PAGE] " + msg.msg);
   }
   return true;
 });
