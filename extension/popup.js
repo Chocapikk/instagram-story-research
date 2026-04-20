@@ -21,6 +21,7 @@ function renderLog() {
     const div = document.createElement("div");
     div.textContent = line;
     if (line.includes("ERROR")) div.className = "log-error";
+    else if (line.includes("[PAGE]")) div.className = "log-page";
     else if (line.includes("[BG]")) div.className = "log-bg";
     el.appendChild(div);
   }
