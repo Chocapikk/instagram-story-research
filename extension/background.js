@@ -308,6 +308,9 @@ function processStoryData(data) {
     if (!storyCache[userId]) storyCache[userId] = { username, items: {} };
     storyCache[userId].username = username;
 
+    // The reel's "seen" field is a timestamp of the last story we reported as seen
+    const reelSeen = reel.seen || reel.seen_at || 0;
+
     for (const item of (reel.items || reel.media || [])) {
       const mediaId = item.id || item.pk;
       if (!mediaId || storyCache[userId].items[mediaId]) continue;
@@ -319,12 +322,17 @@ function processStoryData(data) {
 
       const music = item.story_music_stickers?.[0]?.music_asset_info;
       const isVideo = !!(item.has_audio || item.video_versions?.length);
+      const takenAt = item.taken_at || item.taken_at_timestamp || 0;
+
+      // If Instagram reports this story's timestamp <= reel seen timestamp,
+      // then the seen receipt was already sent before the extension
+      const alreadySeen = reelSeen > 0 && takenAt > 0 && reelSeen >= takenAt;
 
       if (url && settings.autoDownload) downloadMedia(username, mediaId, url, isVideo ? "mp4" : "jpg");
 
       storyCache[userId].items[mediaId] = {
         id: mediaId, code: item.code || null, url,
-        timestamp: item.taken_at || item.taken_at_timestamp,
+        timestamp: takenAt,
         expiring_at: item.expiring_at || null,
         cached_at: now,
         type: isVideo ? "video" : "image",
@@ -337,8 +345,8 @@ function processStoryData(data) {
         viewer_count: item.viewer_count || null,
         viewers: item.viewers || null,
         deleted: false,
-        seenBlocked: settings.blockSeen,
-        seenSent: false
+        seenBlocked: false,
+        seenSent: alreadySeen
       };
     }
   }
