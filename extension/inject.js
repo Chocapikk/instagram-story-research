@@ -17,13 +17,16 @@ function pageLog(msg) {
 
 // ---------------------------------------------------------------------------
 // WebSocket monkey-patch
-// Instagram uses MQTT over WebSocket (gateway.instagram.com) for:
-// - Typing indicators (typing_activity, is_typing)
-// - Presence/online status (co_presence, heartbeat, active_status)
+// Instagram uses MQTT over WebSocket for realtime signals. Two known gateways:
+//   - gateway.instagram.com (primary)
+//   - edge-chat.instagram.com (some regions/versions)
 // ---------------------------------------------------------------------------
+
+const IG_WS_HOSTS = ["gateway.instagram.com", "edge-chat.instagram.com"];
 
 const TYPING_MARKERS = [
   "typing_activity",
+  "indicate_activity",
   "is_typing",
   "/thread_typing"
 ];
@@ -36,12 +39,29 @@ const PRESENCE_MARKERS = [
   "app_presence"
 ];
 
+function isInstagramWS(url) {
+  return url && IG_WS_HOSTS.some(h => url.includes(h));
+}
+
+function decodeFrame(data) {
+  if (typeof data === "string") return data;
+  try {
+    const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+    if (!(bytes instanceof Uint8Array)) return null;
+    // Skip large frames (typing/presence are small, < 500 bytes)
+    if (bytes.length > 500) return null;
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch(_) {
+    return null;
+  }
+}
+
 const originalWSSend = WebSocket.prototype.send;
 let typingBlockedCount = 0;
 let presenceBlockedCount = 0;
 
 WebSocket.prototype.send = function(data) {
-  if (!this.url || !this.url.includes("gateway.instagram.com")) {
+  if (!isInstagramWS(this.url)) {
     return originalWSSend.apply(this, arguments);
   }
 
@@ -49,19 +69,8 @@ WebSocket.prototype.send = function(data) {
     return originalWSSend.apply(this, arguments);
   }
 
-  // Decode binary frame to check for markers
-  let text = "";
-  try {
-    if (typeof data === "string") {
-      text = data;
-    } else if (data instanceof ArrayBuffer) {
-      text = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(data));
-    } else if (data instanceof Uint8Array) {
-      text = new TextDecoder("utf-8", { fatal: false }).decode(data);
-    } else if (data instanceof Blob) {
-      return originalWSSend.apply(this, arguments);
-    }
-  } catch(_) {
+  const text = decodeFrame(data);
+  if (text === null) {
     return originalWSSend.apply(this, arguments);
   }
 
@@ -82,6 +91,6 @@ WebSocket.prototype.send = function(data) {
   return originalWSSend.apply(this, arguments);
 };
 
-pageLog("Page context loaded - WS interception active");
+pageLog("Page context loaded - WS interception active (gateways: " + IG_WS_HOSTS.join(", ") + ")");
 
 } // end guard
