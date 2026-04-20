@@ -322,7 +322,18 @@ function processStoryData(data) {
 
     for (const item of (reel.items || reel.media || [])) {
       const mediaId = item.id || item.pk;
-      if (!mediaId || storyCache[userId].items[mediaId]) continue;
+      if (!mediaId) continue;
+
+      // Update seen status on existing cached items
+      if (storyCache[userId].items[mediaId]) {
+        const existing = storyCache[userId].items[mediaId];
+        const takenAt = existing.timestamp || 0;
+        if (!existing.seenSent && reelSeen > 0 && takenAt > 0 && reelSeen >= takenAt) {
+          existing.seenSent = true;
+          seenHistory[mediaId] = { seenSent: true, seenBlocked: existing.seenBlocked, username, timestamp: takenAt };
+        }
+        continue;
+      }
 
       let url = null;
       if (item.video_versions?.length) url = item.video_versions[0].url;
