@@ -19,6 +19,7 @@ let settings = {
   blockSeen: true,
   blockDMRead: true,
   blockTyping: true,
+  blockPresence: false,
   autoFetch: true,
   autoDownload: true,
   fetchInterval: 300
