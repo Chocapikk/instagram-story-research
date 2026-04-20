@@ -45,6 +45,15 @@ function timeAgo(ts) {
   return Math.floor(diff / 86400) + "d ago";
 }
 
+function durationStr(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m " + (s % 60) + "s";
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h + "h " + m + "m";
+}
+
 function formatDate(ts) {
   return ts ? new Date(ts * 1000).toLocaleString() : "-";
 }
@@ -263,12 +272,33 @@ function buildCard(username, item) {
   const now = Math.floor(Date.now() / 1000);
   const isExpired = item.expiring_at && now > item.expiring_at;
   if (item.deleted) {
-    // Deleted before expiry = manually removed by poster
     const del = document.createElement("span");
     del.className = "badge badge-purged";
     del.textContent = "\uD83D\uDDD1 PURGED";
-    del.title = "Manually deleted by poster at " + formatMs(item.deleted_at) + " (before expiry)";
+
+    // Calculate deltas
+    const postedMs = item.timestamp ? item.timestamp * 1000 : 0;
+    const deletedMs = item.deleted_at || 0;
+    const cachedMs = item.cached_at || 0;
+    let titleParts = ["Manually deleted by poster"];
+    if (postedMs && deletedMs) {
+      titleParts.push("Lived: " + durationStr(deletedMs - postedMs));
+    }
+    if (cachedMs && deletedMs && !item.seenBlocked) {
+      titleParts.push("You saw it " + durationStr(deletedMs - cachedMs) + " before deletion");
+    }
+    del.title = titleParts.join(" | ");
     top.appendChild(del);
+
+    // Show duration badge
+    if (postedMs && deletedMs) {
+      const dur = document.createElement("span");
+      dur.className = "story-time";
+      dur.style.color = "#f85149";
+      dur.textContent = "\u23F1 " + durationStr(deletedMs - postedMs);
+      dur.title = "Story lived " + durationStr(deletedMs - postedMs) + " before being deleted";
+      top.appendChild(dur);
+    }
   } else if (isExpired) {
     const exp = document.createElement("span");
     exp.className = "badge badge-expired";
@@ -333,6 +363,10 @@ function buildCard(username, item) {
     ["Audience", item.audience],
     ["Viewers", item.viewer_count],
     ["Deleted", item.deleted ? "Yes (" + formatMs(item.deleted_at) + ")" : "No"],
+    ["Story lifespan", item.deleted && item.timestamp && item.deleted_at ? durationStr(item.deleted_at - item.timestamp * 1000) : null],
+    ["Seen after", item.cached_at && item.timestamp ? durationStr(item.cached_at - item.timestamp * 1000) : null],
+    ["Deleted after seen", item.deleted && item.cached_at && item.deleted_at && !item.seenBlocked ? durationStr(item.deleted_at - item.cached_at) : null],
+    ["Seen status", item.seenSent ? "Seen (receipt sent)" : item.seenBlocked ? "Ghost (receipt blocked)" : "Auto-fetched"],
     ["Local path", getLocalPath(username, item)]
   ];
 
