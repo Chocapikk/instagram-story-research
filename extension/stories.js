@@ -228,54 +228,50 @@ function buildCard(username, item) {
 
   const typeBadge = document.createElement("span");
   typeBadge.className = "badge " + (item.type === "video" ? "badge-video" : "badge-image");
-  typeBadge.textContent = item.type === "video" ? "VID" : "IMG";
+  typeBadge.textContent = item.type === "video" ? "\u25B6 VID" : "\uD83D\uDDBC IMG";
   top.appendChild(typeBadge);
 
-  // Local only badge (not in live cache, only on disk)
   if (item.localOnly) {
     const local = document.createElement("span");
     local.className = "badge badge-local";
     local.textContent = "\uD83D\uDCBE LOCAL";
-    local.title = "This story is only available from local disk (expired from cache)";
+    local.title = "Only on disk - expired from live cache";
     top.appendChild(local);
   }
 
-  // Close friends badge
   if (item.audience === "besties") {
     const bestie = document.createElement("span");
     bestie.className = "badge badge-bestie";
-    bestie.textContent = "\u2605 BESTIE";
+    bestie.textContent = "\u2B50 CLOSE FRIENDS";
     top.appendChild(bestie);
   }
 
-  // Seen status
   if (item.seenSent) {
     const seen = document.createElement("span");
     seen.className = "badge badge-seen";
-    seen.textContent = "\u2713 SEEN";
-    seen.title = "Seen receipt was sent to Instagram";
+    seen.textContent = "\uD83D\uDC41 SEEN";
+    seen.title = "You viewed this and the seen receipt was sent";
     top.appendChild(seen);
   } else if (item.seenBlocked) {
     const ghost = document.createElement("span");
     ghost.className = "badge badge-ghost";
-    ghost.textContent = "\u2B24 GHOST";
-    ghost.title = "Viewed invisibly - seen receipt was blocked";
+    ghost.textContent = "\uD83D\uDC7B GHOST";
+    ghost.title = "Viewed invisibly - no receipt sent";
     top.appendChild(ghost);
   }
 
-  // Expiry status
   const now = Math.floor(Date.now() / 1000);
   const isExpired = item.expiring_at && now > item.expiring_at;
   if (isExpired) {
     const exp = document.createElement("span");
     exp.className = "badge badge-expired";
-    exp.textContent = "EXPIRED";
-    exp.title = "Story expired at " + formatDate(item.expiring_at);
+    exp.textContent = "\u23F0 EXPIRED";
+    exp.title = "Expired at " + formatDate(item.expiring_at);
     top.appendChild(exp);
   } else if (item.expiring_at) {
     const live = document.createElement("span");
     live.className = "badge badge-live";
-    live.textContent = "LIVE";
+    live.textContent = "\uD83D\uDFE2 LIVE";
     live.title = "Expires " + formatDate(item.expiring_at);
     top.appendChild(live);
   }
@@ -283,7 +279,7 @@ function buildCard(username, item) {
   if (item.deleted) {
     const del = document.createElement("span");
     del.className = "badge badge-deleted";
-    del.textContent = "DELETED";
+    del.textContent = "\u274C DELETED";
     top.appendChild(del);
   }
 

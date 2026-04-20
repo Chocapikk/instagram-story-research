@@ -125,18 +125,21 @@
       margin-bottom: 6px;
     }
     .badge {
-      font-size: 10px; font-weight: 700; padding: 2px 7px;
-      border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+      font-size: 10px; font-weight: 800; padding: 3px 8px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: 0.8px;
+      display: inline-flex; align-items: center; gap: 3px;
+      border: 1.5px solid; line-height: 1;
     }
-    .badge-video { background: #1f3a2d; color: var(--accent-green); }
-    .badge-image { background: #1c2d4a; color: var(--accent-blue); }
-    .badge-deleted { background: color-mix(in srgb, var(--accent-red) 20%, transparent); color: var(--accent-red); }
-    .badge-bestie { background: #3d2e00; color: #f0c040; font-weight: 800; }
-    .badge-ghost { background: color-mix(in srgb, var(--accent-purple) 20%, transparent); color: var(--accent-purple); }
-    .badge-seen { background: color-mix(in srgb, var(--accent-yellow) 20%, transparent); color: var(--accent-yellow); }
-    .badge-expired { background: color-mix(in srgb, var(--text-muted) 20%, transparent); color: var(--text-muted); }
-    .badge-live { background: color-mix(in srgb, var(--accent-green) 20%, transparent); color: var(--accent-green); }
-    .badge-local { background: color-mix(in srgb, var(--accent-blue) 20%, transparent); color: var(--accent-blue); }
+    .badge-video { background: #0b2e1b; color: #56d364; border-color: #238636; }
+    .badge-image { background: #0c2d6b; color: #79c0ff; border-color: #1f6feb; }
+    .badge-deleted { background: #3d0e0e; color: #ff7b72; border-color: #da3633; }
+    .badge-bestie { background: #3d2e00; color: #ffd33d; border-color: #d29922; font-size: 11px; }
+    .badge-ghost { background: #271052; color: #d2a8ff; border-color: #8957e5; }
+    .badge-seen { background: #3d2e00; color: #e3b341; border-color: #9e6a03; }
+    .badge-expired { background: #1c1c1c; color: #8b949e; border-color: #484f58; }
+    .badge-live { background: #0b2e1b; color: #56d364; border-color: #238636; animation: livePulse 2s ease-in-out infinite; }
+    .badge-local { background: #0c2d6b; color: #79c0ff; border-color: #1f6feb; }
+    @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
     .story-time { font-size: 11px; color: var(--text-secondary); margin-left: auto; }
 
     .story-music { color: var(--accent-purple); font-size: 11px; margin-top: 3px; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
