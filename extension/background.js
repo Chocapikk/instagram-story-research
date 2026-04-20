@@ -194,10 +194,42 @@ browser.webRequest.onBeforeRequest.addListener(
     if (fnMatch && docMatch) capturedDocIds[fnMatch[1]] = docMatch[1];
 
     // Block story seen mutation (if enabled)
-    if (settings.blockSeen && body.includes(SEEN_MUTATION)) {
-      blockedCount++;
-      bglog("Blocked StorySeen #" + blockedCount);
-      return { cancel: true };
+    if (body.includes(SEEN_MUTATION)) {
+      if (settings.blockSeen) {
+        // Try to extract reel/media IDs from the mutation body to mark as ghost-viewed
+        try {
+          const vars = body.match(/variables=([^&]+)/);
+          if (vars) {
+            const parsed = JSON.parse(decodeURIComponent(vars[1]));
+            const reelId = parsed.reel_id || parsed.reelId;
+            const mediaId = parsed.reel_media_id || parsed.reelMediaId;
+            if (reelId && storyCache[reelId]) {
+              for (const [id, item] of Object.entries(storyCache[reelId].items)) {
+                if (!item.seenBlocked) item.seenBlocked = true;
+              }
+              browser.storage.local.set({ storyCache });
+            }
+          }
+        } catch(_) {}
+        blockedCount++;
+        bglog("Blocked StorySeen #" + blockedCount);
+        return { cancel: true };
+      }
+      // Seen not blocked - mark stories as seen (vu lâché)
+      try {
+        const vars = body.match(/variables=([^&]+)/);
+        if (vars) {
+          const parsed = JSON.parse(decodeURIComponent(vars[1]));
+          const reelId = parsed.reel_id || parsed.reelId;
+          if (reelId && storyCache[reelId]) {
+            for (const [id, item] of Object.entries(storyCache[reelId].items)) {
+              item.seenSent = true;
+            }
+            browser.storage.local.set({ storyCache });
+            bglog("Seen sent for reel", reelId);
+          }
+        }
+      } catch(_) {}
     }
 
     // Block DM read receipts (if enabled)
@@ -304,7 +336,9 @@ function processStoryData(data) {
         audience: item.audience || null,
         viewer_count: item.viewer_count || null,
         viewers: item.viewers || null,
-        deleted: false
+        deleted: false,
+        seenBlocked: settings.blockSeen,
+        seenSent: false
       };
     }
   }

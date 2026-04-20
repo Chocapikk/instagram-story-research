@@ -158,6 +158,29 @@ function buildCard(username, item) {
   typeBadge.textContent = item.type === "video" ? "VID" : "IMG";
   top.appendChild(typeBadge);
 
+  // Close friends badge
+  if (item.audience === "besties") {
+    const bestie = document.createElement("span");
+    bestie.className = "badge badge-bestie";
+    bestie.textContent = "\u2605 BESTIE";
+    top.appendChild(bestie);
+  }
+
+  // Seen status
+  if (item.seenSent) {
+    const seen = document.createElement("span");
+    seen.className = "badge badge-seen";
+    seen.textContent = "\u2713 SEEN";
+    seen.title = "Seen receipt was sent to Instagram";
+    top.appendChild(seen);
+  } else if (item.seenBlocked) {
+    const ghost = document.createElement("span");
+    ghost.className = "badge badge-ghost";
+    ghost.textContent = "\u2B24 GHOST";
+    ghost.title = "Viewed invisibly - seen receipt was blocked";
+    top.appendChild(ghost);
+  }
+
   if (item.deleted) {
     const del = document.createElement("span");
     del.className = "badge badge-deleted";
