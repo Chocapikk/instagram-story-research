@@ -47,6 +47,18 @@ let pendingTrayIds = null;
 let autoFetchRetries = 0;
 let isFetchingPages = false;
 
+// Restore persisted state on startup
+browser.storage.local.get(["reelIds", "storyCache"]).then(result => {
+  if (result.reelIds?.length) {
+    allReelIds = result.reelIds;
+    bglog("Restored", allReelIds.length, "reel IDs from storage");
+  }
+  if (result.storyCache && Object.keys(result.storyCache).length) {
+    storyCache = result.storyCache;
+    bglog("Restored", Object.keys(storyCache).length, "users from storage");
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -289,6 +301,7 @@ function processStoryData(data) {
 
   const s = cacheStats();
   bglog("Cached " + reels.length + " reels | " + s.users + " users | " + s.stories + " stories");
+  browser.storage.local.set({ storyCache, reelIds: allReelIds });
   exportCSV();
 }
 
@@ -422,13 +435,18 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const ids = msg.users.map(u => u.id);
     bglog("Got", ids.length, "tray user IDs from content script");
     allReelIds = [...new Set([...allReelIds, ...ids])];
+    browser.storage.local.set({ reelIds: allReelIds });
     pendingTrayIds = ids;
     tryAutoFetch();
     sendResponse({ ok: true });
   }
   if (msg.type === "triggerFetch") {
-    bglog("Manual fetch triggered");
-    if (allReelIds.length > 0) buildAndFireGalleryQuery(allReelIds);
+    bglog("Manual fetch triggered, reelIds:", allReelIds.length);
+    if (allReelIds.length > 0) {
+      buildAndFireGalleryQuery(allReelIds);
+    } else {
+      bglog("No reel IDs available. Browse Instagram first or click on stories.");
+    }
     sendResponse({ ok: true });
   }
   if (msg.type === "clearCache") { storyCache = {}; sendResponse({ ok: true }); }
