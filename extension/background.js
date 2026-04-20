@@ -317,7 +317,8 @@ function processStoryData(data) {
     storyCache[userId].username = username;
 
     // The reel's "seen" field is a timestamp of the last story we reported as seen
-    const reelSeen = reel.seen || reel.seen_at || 0;
+    // Check both the reel data and the tray seen timestamps
+    const reelSeen = reel.seen || reel.seen_at || traySeenTimestamps[String(userId)] || 0;
 
     for (const item of (reel.items || reel.media || [])) {
       const mediaId = item.id || item.pk;
@@ -406,6 +407,9 @@ async function ensureHeaders() {
   } catch(_) {}
 }
 
+// Stores seen timestamps per reel from the tray API
+let traySeenTimestamps = {};
+
 async function fetchFullTray() {
   await ensureHeaders();
   try {
@@ -424,9 +428,18 @@ async function fetchFullTray() {
       for (const reel of data.tray) {
         const id = reel.id || reel.user?.pk || reel.user?.id;
         const username = reel.user?.username;
-        if (id && username) ids.push({ id: String(id), username });
+        if (id && username) {
+          ids.push({ id: String(id), username });
+          // Capture seen timestamp from tray
+          const seen = reel.seen || reel.seen_at || 0;
+          const latestMedia = reel.latest_reel_media || 0;
+          if (seen > 0) {
+            traySeenTimestamps[String(id)] = seen;
+          }
+          bglog("Tray:", username, "| seen:", seen, "| latest:", latestMedia, "| unseen:", seen < latestMedia);
+        }
       }
-      bglog("Tray API returned", ids.length, "users with active stories");
+      bglog("Tray API returned", ids.length, "users,", Object.keys(traySeenTimestamps).length, "with seen data");
       return ids;
     }
   } catch (e) {
