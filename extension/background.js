@@ -55,8 +55,12 @@ let pendingTrayIds = null;
 let autoFetchRetries = 0;
 let isFetchingPages = false;
 
+// Persistent seen history: { mediaId: { seenSent, seenBlocked, username, timestamp } }
+// Survives cache clear, allows restoring seen status on expired stories
+let seenHistory = {};
+
 // Restore persisted state on startup
-browser.storage.local.get(["reelIds", "storyCache"]).then(result => {
+browser.storage.local.get(["reelIds", "storyCache", "seenHistory"]).then(result => {
   if (result.reelIds?.length) {
     allReelIds = result.reelIds;
     bglog("Restored", allReelIds.length, "reel IDs from storage");
@@ -64,6 +68,10 @@ browser.storage.local.get(["reelIds", "storyCache"]).then(result => {
   if (result.storyCache && Object.keys(result.storyCache).length) {
     storyCache = result.storyCache;
     bglog("Restored", Object.keys(storyCache).length, "users from storage");
+  }
+  if (result.seenHistory && Object.keys(result.seenHistory).length) {
+    seenHistory = result.seenHistory;
+    bglog("Restored", Object.keys(seenHistory).length, "seen history entries");
   }
 });
 
@@ -115,7 +123,7 @@ function cacheStats() {
 }
 
 function exportCSV() {
-  const rows = ["username,media_id,code,type,timestamp,posted_at,expires_at,cached_at,music_title,music_artist,caption,audience,viewer_count,file_path,deleted,deleted_at"];
+  const rows = ["username,media_id,code,type,timestamp,posted_at,expires_at,cached_at,music_title,music_artist,caption,audience,viewer_count,file_path,deleted,deleted_at,seen_sent,seen_blocked"];
 
   for (const [, data] of Object.entries(storyCache)) {
     for (const [, item] of Object.entries(data.items)) {
@@ -145,7 +153,9 @@ function exportCSV() {
         item.viewer_count || "",
         filePath,
         item.deleted || false,
-        deletedAt
+        deletedAt,
+        item.seenSent || false,
+        item.seenBlocked || false
       ].join(","));
     }
   }
@@ -195,40 +205,38 @@ browser.webRequest.onBeforeRequest.addListener(
 
     // Block story seen mutation (if enabled)
     if (body.includes(SEEN_MUTATION)) {
-      if (settings.blockSeen) {
-        // Try to extract reel/media IDs from the mutation body to mark as ghost-viewed
-        try {
-          const vars = body.match(/variables=([^&]+)/);
-          if (vars) {
-            const parsed = JSON.parse(decodeURIComponent(vars[1]));
-            const reelId = parsed.reel_id || parsed.reelId;
-            const mediaId = parsed.reel_media_id || parsed.reelMediaId;
-            if (reelId && storyCache[reelId]) {
-              for (const [id, item] of Object.entries(storyCache[reelId].items)) {
-                if (!item.seenBlocked) item.seenBlocked = true;
-              }
-              browser.storage.local.set({ storyCache });
-            }
-          }
-        } catch(_) {}
-        blockedCount++;
-        bglog("Blocked StorySeen #" + blockedCount);
-        return { cancel: true };
-      }
-      // Seen not blocked - mark stories as seen (vu lâché)
+      // Extract reel ID from mutation body
+      let reelId = null;
       try {
         const vars = body.match(/variables=([^&]+)/);
         if (vars) {
           const parsed = JSON.parse(decodeURIComponent(vars[1]));
-          const reelId = parsed.reel_id || parsed.reelId;
-          if (reelId && storyCache[reelId]) {
-            for (const [id, item] of Object.entries(storyCache[reelId].items)) {
-              item.seenSent = true;
-            }
-            browser.storage.local.set({ storyCache });
-            bglog("Seen sent for reel", reelId);
-          }
+          reelId = parsed.reel_id || parsed.reelId;
         }
+      } catch(_) {}
+
+      if (settings.blockSeen) {
+        if (reelId && storyCache[reelId]) {
+          const username = storyCache[reelId].username;
+          for (const [id, item] of Object.entries(storyCache[reelId].items)) {
+            item.seenBlocked = true;
+            seenHistory[id] = { seenSent: false, seenBlocked: true, username, timestamp: item.timestamp };
+          }
+          browser.storage.local.set({ storyCache, seenHistory });
+        }
+        blockedCount++;
+        bglog("Blocked StorySeen #" + blockedCount, reelId ? "(reel " + reelId + ")" : "");
+        return { cancel: true };
+      }
+      // Seen not blocked - mark stories as seen (vu lâché)
+      if (reelId && storyCache[reelId]) {
+        const username = storyCache[reelId].username;
+        for (const [id, item] of Object.entries(storyCache[reelId].items)) {
+          item.seenSent = true;
+          seenHistory[id] = { seenSent: true, seenBlocked: false, username, timestamp: item.timestamp };
+        }
+        browser.storage.local.set({ storyCache, seenHistory });
+        bglog("Seen sent for reel", reelId);
       } catch(_) {}
     }
 
@@ -324,9 +332,10 @@ function processStoryData(data) {
       const isVideo = !!(item.has_audio || item.video_versions?.length);
       const takenAt = item.taken_at || item.taken_at_timestamp || 0;
 
-      // If Instagram reports this story's timestamp <= reel seen timestamp,
-      // then the seen receipt was already sent before the extension
-      const alreadySeen = reelSeen > 0 && takenAt > 0 && reelSeen >= takenAt;
+      // Check seen status: first from seenHistory, then from reel timestamp
+      const histEntry = seenHistory[mediaId];
+      const alreadySeen = (histEntry?.seenSent) || (reelSeen > 0 && takenAt > 0 && reelSeen >= takenAt);
+      const wasBlocked = histEntry?.seenBlocked || false;
 
       if (url && settings.autoDownload) downloadMedia(username, mediaId, url, isVideo ? "mp4" : "jpg");
 
@@ -345,7 +354,7 @@ function processStoryData(data) {
         viewer_count: item.viewer_count || null,
         viewers: item.viewers || null,
         deleted: false,
-        seenBlocked: false,
+        seenBlocked: wasBlocked,
         seenSent: alreadySeen
       };
     }
