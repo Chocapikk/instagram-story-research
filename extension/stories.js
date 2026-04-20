@@ -262,11 +262,18 @@ function buildCard(username, item) {
 
   const now = Math.floor(Date.now() / 1000);
   const isExpired = item.expiring_at && now > item.expiring_at;
-  if (isExpired) {
+  if (item.deleted) {
+    // Deleted before expiry = manually removed by poster
+    const del = document.createElement("span");
+    del.className = "badge badge-purged";
+    del.textContent = "\uD83D\uDDD1 PURGED";
+    del.title = "Manually deleted by poster at " + formatMs(item.deleted_at) + " (before expiry)";
+    top.appendChild(del);
+  } else if (isExpired) {
     const exp = document.createElement("span");
     exp.className = "badge badge-expired";
     exp.textContent = "\u23F0 EXPIRED";
-    exp.title = "Expired at " + formatDate(item.expiring_at);
+    exp.title = "Naturally expired at " + formatDate(item.expiring_at);
     top.appendChild(exp);
   } else if (item.expiring_at) {
     const live = document.createElement("span");
@@ -274,13 +281,6 @@ function buildCard(username, item) {
     live.textContent = "\uD83D\uDFE2 LIVE";
     live.title = "Expires " + formatDate(item.expiring_at);
     top.appendChild(live);
-  }
-
-  if (item.deleted) {
-    const del = document.createElement("span");
-    del.className = "badge badge-deleted";
-    del.textContent = "\u274C DELETED";
-    top.appendChild(del);
   }
 
   if (item.timestamp) {
