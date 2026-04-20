@@ -339,24 +339,67 @@ function tryAutoFetch() {
 
 let selfFetchIds = new Set();
 
-async function buildAndFireGalleryQuery(trayIds) {
-  bglog("Building GalleryQuery for", trayIds.length, "users");
-
-  // If we don't have headers yet, try extracting from the IG page
-  if (!lastQueryHeaders["X-CSRFToken"]) {
-    bglog("No CSRF token yet, extracting from Instagram tab...");
-    try {
-      const tabs = await browser.tabs.query({ url: "https://www.instagram.com/*" });
-      if (tabs.length > 0) {
-        const resp = await browser.tabs.sendMessage(tabs[0].id, { type: "extractHeaders" });
-        if (resp?.csrf) {
-          lastQueryHeaders["X-CSRFToken"] = resp.csrf;
-          if (resp.lsd) lastQueryHeaders["X-FB-LSD"] = resp.lsd;
-          bglog("Got CSRF from content script");
-        }
+async function ensureHeaders() {
+  if (lastQueryHeaders["X-CSRFToken"]) return;
+  bglog("No CSRF token yet, extracting from Instagram tab...");
+  try {
+    const tabs = await browser.tabs.query({ url: "https://www.instagram.com/*" });
+    if (tabs.length > 0) {
+      const resp = await browser.tabs.sendMessage(tabs[0].id, { type: "extractHeaders" });
+      if (resp?.csrf) {
+        lastQueryHeaders["X-CSRFToken"] = resp.csrf;
+        if (resp.lsd) lastQueryHeaders["X-FB-LSD"] = resp.lsd;
+        bglog("Got CSRF from content script");
       }
-    } catch(_) {}
+    }
+  } catch(_) {}
+}
+
+async function fetchFullTray() {
+  await ensureHeaders();
+  try {
+    const resp = await fetch("https://www.instagram.com/api/v1/feed/reels_tray/", {
+      method: "GET",
+      headers: {
+        "X-CSRFToken": lastQueryHeaders["X-CSRFToken"] || "",
+        "X-IG-App-ID": lastQueryHeaders["X-IG-App-ID"] || "936619743392459",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      credentials: "include"
+    });
+    const data = await resp.json();
+    if (data.tray) {
+      const ids = [];
+      for (const reel of data.tray) {
+        const id = reel.id || reel.user?.pk || reel.user?.id;
+        const username = reel.user?.username;
+        if (id && username) ids.push({ id: String(id), username });
+      }
+      bglog("Tray API returned", ids.length, "users with active stories");
+      return ids;
+    }
+  } catch (e) {
+    bglog("ERROR: Tray fetch failed:", e.message || e);
   }
+  return [];
+}
+
+async function buildAndFireGalleryQuery(trayIds) {
+  // First, try to get the full tray from the API
+  const trayUsers = await fetchFullTray();
+  if (trayUsers.length > 0) {
+    const newIds = trayUsers.map(u => u.id);
+    const merged = [...new Set([...trayIds, ...newIds])];
+    if (merged.length > trayIds.length) {
+      bglog("Merged tray IDs:", trayIds.length, "->", merged.length);
+      trayIds = merged;
+      allReelIds = merged;
+      browser.storage.local.set({ reelIds: allReelIds });
+    }
+  }
+
+  bglog("Building GalleryQuery for", trayIds.length, "users");
+  await ensureHeaders();
 
   let after = null;
   let page = 0;
