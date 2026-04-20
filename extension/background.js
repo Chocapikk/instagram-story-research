@@ -127,7 +127,7 @@ function exportCSV() {
     url,
     filename: "ig_stories/history.csv",
     saveAs: false,
-    conflictAction: "overwrite"
+    conflictAction: "uniquify"
   }).then(() => {
     console.log("[IG] CSV exported:", rows.length - 1, "entries");
     URL.revokeObjectURL(url);
