@@ -2,6 +2,10 @@
 // Blocks SeenMutation, caches stories, auto-fetches, downloads media
 
 const SEEN_MUTATION = "PolarisStoriesV3SeenMutation";
+const DM_READ_MUTATIONS = [
+  "useIGDMarkThreadAsReadMutation",
+  "useIGDMarkThreadAsReadValidationMutation"
+];
 const STORY_QUERIES = [
   "PolarisStoriesV3ReelPageGalleryQuery",
   "PolarisStoriesV3ReelPageGalleryPaginationQuery"
@@ -12,6 +16,7 @@ const GALLERY_DOC_ID_FALLBACK = "25869747379387218";
 // Settings (persisted via storage.local)
 let settings = {
   blockSeen: true,
+  blockDMRead: true,
   autoFetch: true,
   autoDownload: true,
   fetchInterval: 300
@@ -185,10 +190,17 @@ browser.webRequest.onBeforeRequest.addListener(
     const docMatch = body.match(/doc_id=(\d+)/);
     if (fnMatch && docMatch) capturedDocIds[fnMatch[1]] = docMatch[1];
 
-    // Block seen mutation (if enabled)
+    // Block story seen mutation (if enabled)
     if (settings.blockSeen && body.includes(SEEN_MUTATION)) {
       blockedCount++;
-      bglog("Blocked SeenMutation #" + blockedCount);
+      bglog("Blocked StorySeen #" + blockedCount);
+      return { cancel: true };
+    }
+
+    // Block DM read receipts (if enabled)
+    if (settings.blockDMRead && DM_READ_MUTATIONS.some(m => body.includes(m))) {
+      blockedCount++;
+      bglog("Blocked DMRead #" + blockedCount);
       return { cancel: true };
     }
 
