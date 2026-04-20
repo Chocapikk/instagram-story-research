@@ -51,7 +51,25 @@ function durationStr(ms) {
   if (s < 3600) return Math.floor(s / 60) + "m " + (s % 60) + "s";
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
+  if (h >= 24) return Math.floor(h / 24) + "d " + (h % 24) + "h";
   return h + "h " + m + "m";
+}
+
+function parseCdnExpiry(url) {
+  if (!url) return null;
+  const match = url.match(/[&?]oe=([0-9a-fA-F]+)/);
+  if (!match) return null;
+  return parseInt(match[1], 16) * 1000;
+}
+
+function cdnStatus(url) {
+  const expiry = parseCdnExpiry(url);
+  if (!expiry) return null;
+  const now = Date.now();
+  if (now < expiry) {
+    return { valid: true, expiry, remaining: durationStr(expiry - now) };
+  }
+  return { valid: false, expiry, elapsed: durationStr(now - expiry) };
 }
 
 function formatDate(ts) {
@@ -332,6 +350,22 @@ function buildCard(username, item) {
     top.appendChild(live);
   }
 
+  // CDN token status
+  const cdn = cdnStatus(item.url);
+  if (cdn) {
+    const cdnBadge = document.createElement("span");
+    if (cdn.valid) {
+      cdnBadge.className = "badge badge-live";
+      cdnBadge.textContent = "\uD83D\uDD17 CDN " + cdn.remaining;
+      cdnBadge.title = "CDN token valid for " + cdn.remaining + " (expires " + new Date(cdn.expiry).toLocaleString() + ")";
+    } else {
+      cdnBadge.className = "badge badge-expired";
+      cdnBadge.textContent = "\uD83D\uDD17 CDN dead";
+      cdnBadge.title = "CDN token expired " + cdn.elapsed + " ago";
+    }
+    top.appendChild(cdnBadge);
+  }
+
   if (item.timestamp) {
     const time = document.createElement("span");
     time.className = "story-time";
@@ -386,6 +420,9 @@ function buildCard(username, item) {
     ["Seen after", item.cached_at && item.timestamp ? durationStr(item.cached_at - item.timestamp * 1000) : null],
     ["Deleted after seen", item.deleted && item.cached_at && item.deleted_at && !item.seenBlocked ? durationStr(item.deleted_at - item.cached_at) : null],
     ["Seen status", item.seenSent ? "Seen (receipt sent)" : item.seenBlocked ? "Ghost (receipt blocked)" : "Auto-fetched"],
+    ["CDN token expires", cdn ? new Date(cdn.expiry).toLocaleString() : null],
+    ["CDN token status", cdn ? (cdn.valid ? "Valid (" + cdn.remaining + " remaining)" : "Expired (" + cdn.elapsed + " ago)") : null],
+    ["CDN token lifetime", cdn && item.timestamp ? durationStr(cdn.expiry - item.timestamp * 1000) + " after post" : null],
     ["Local path", getLocalPath(username, item)]
   ];
 
