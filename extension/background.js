@@ -123,7 +123,7 @@ function cacheStats() {
 }
 
 function exportCSV() {
-  const rows = ["username,media_id,code,type,timestamp,posted_at,expires_at,cached_at,music_title,music_artist,caption,audience,viewer_count,file_path,deleted,deleted_at,seen_sent,seen_blocked"];
+  const rows = ["username,media_id,code,type,timestamp,posted_at,expires_at,cached_at,music_title,music_artist,caption,audience,viewer_count,file_path,deleted,deleted_at,seen_sent,seen_blocked,cdn_url"];
 
   for (const [, data] of Object.entries(storyCache)) {
     for (const [, item] of Object.entries(data.items)) {
@@ -155,7 +155,8 @@ function exportCSV() {
         item.deleted || false,
         deletedAt,
         item.seenSent || false,
-        item.seenBlocked || false
+        item.seenBlocked || false,
+        escape(item.url)
       ].join(","));
     }
   }
