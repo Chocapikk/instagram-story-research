@@ -1,193 +1,121 @@
-# Instagram's "Seen" Indicator Is a Lie — And They're About to Charge You $2/Month for the Proof
+# IG Ghost Mode
 
-## How it started
+**The PoC that became a product. You're welcome, Meta.**
 
-I noticed something dumb. I was scrolling Instagram on my phone and someone deleted their story. But I could still see it in my app's cache. The story was gone from Instagram's servers, but my phone still had it. I thought: what if I could intercept this before it disappears?
+A Firefox extension that blocks every client-side privacy signal Instagram uses: story seen receipts, DM read receipts, typing indicators, and online presence. Plus automatic story caching, media downloads, deletion detection, and metadata export.
 
-I didn't know anything about Instagram's internal API. I just opened DevTools, clicked on a story, and looked at the network tab. What I found was worse than I expected.
+Full writeup: [Instagram's "Seen" Is a Lie](https://chocapikk.com/posts/2026/instagram-seen-is-a-lie/)
 
-## What I found
+## What it blocks
 
-When you view an Instagram story, two separate HTTP calls happen:
+| Signal | Mechanism | What's blocked | Toggle |
+|--------|-----------|---------------|--------|
+| Story seen | GraphQL POST | `PolarisStoriesV3SeenMutation` | Story seen |
+| DM read | GraphQL POST | `useIGDMarkThreadAsReadValidationMutation` | DM read |
+| Typing indicator | MQTT WebSocket | `typing_activity` on `gateway.instagram.com` | Typing |
+| Online presence | MQTT WebSocket | `co_presence` heartbeat on `gateway.instagram.com` | Online |
 
-```
-1. PolarisStoriesV3ReelPageGalleryQuery  →  downloads the story content
-2. PolarisStoriesV3SeenMutation          →  tells Instagram you viewed it
-```
+Every single "privacy signal" on Instagram is client-side trust with zero server-side enforcement. Block the call and you're invisible. One toggle per signal.
 
-That's it. Two calls. The content is already in your browser before Instagram knows you saw it. The "seen" indicator that 2 billion users trust is a separate GraphQL mutation that any browser extension can block with one line:
+## What it does beyond blocking
 
-```javascript
-if (body.includes("PolarisStoriesV3SeenMutation")) {
-  return { cancel: true };
-}
-```
-
-One line. The "seen" is gone. You're invisible. No hack, no exploit, no reverse engineering. Just a standard `webRequest` API that Firefox and Chrome have supported for over a decade.
-
-## The $2 billion punchline
-
-Instagram is actively testing [Instagram Plus](https://techcrunch.com/2026/03/30/meta-starts-testing-a-premium-subscription-on-instagram/), a paid subscription currently rolling out in Mexico, Japan, and Philippines ([source](https://proton.me/blog/instagram-anonymous-story-viewer)). The flagship feature? **Anonymous story viewing.** Pay $1-2/month and your name won't appear in the viewer list.
-
-Meta projects [$2.4 billion in annual revenue](https://www.webpronews.com/meta-wants-you-to-pay-for-the-privilege-of-lurking-inside-instagrams-secret-story-viewing-test/) if 1% of users subscribe.
-
-The full Instagram Plus package:
-- **Anonymous story viewing** — what this extension does for free
-- **Searchable viewer lists** — what this extension captures in metadata for free
-- Granular audience groups beyond Close Friends
-- Stories that last beyond 24 hours
-- Weekly spotlight to boost story visibility
-- Animated "Superlikes"
-- Detailed engagement metrics including rewatch counts
-
-Nobody pays $2/month for animated Superlikes. They pay to view without being seen and to know who's viewing them. Both have always been free in the architecture. The rest is filler to justify the price tag.
-
-**The product is a `cancel: true` on a GraphQL call. That's it. That's the $2.4 billion business.**
-
-And this isn't new. Browser extensions doing the exact same thing have existed since [2019](https://github.com/haikov/instaghost). Seven years. Zero stars, zero attention, zero media coverage. The capability has been public for seven years and nobody connected the dots. Now Meta is packaging it as a premium feature and the tech press is covering it as innovation. It's not innovation. It's monetizing a design flaw that the security community documented years ago and that nobody outside of it ever noticed.
-
-## Prior art
-
-| Project | Year | Method | Still works? | Cache | Download | Deletion | Auto-fetch |
-|---------|------|--------|-------------|-------|----------|----------|------------|
-| [instaghost](https://github.com/haikov/instaghost) | 2019 | Blocks REST `/api/v1/stories/reel/seen` | Probably not | No | No | No | No |
-| [incognito-viewer](https://github.com/yizzycool/instagram-story-incognito-viewer) | 2023 | Blocks REST `/api/v1/stories/reel/seen` via `declarativeNetRequest` | Probably not | No | No | No | No |
-| [Greasyfork script](https://greasyfork.org/en/scripts/535035-instagram-anonymous-story-viewer) | ~2025 | Regex on `viewSeenAt` / `story_view` in XHR/fetch | Maybe | No | No | No | No |
-| **This extension** | 2026 | Blocks GraphQL `PolarisStoriesV3SeenMutation` via `webRequest` + `StreamFilter` | **Yes** | **Yes** | **Yes** | **Yes** | **Yes** |
-
-Every prior implementation does one thing: block the seen call. None identified the actual GraphQL mutation name. None cache content, download media, detect deletions, auto-fetch, extract doc_ids, or export metadata. They all target the old REST endpoint `/api/v1/stories/reel/seen` which Instagram migrated away from. They probably don't work anymore on the current web client.
-
-## What this extension does
-
-I built a Firefox extension as a proof of concept. It does more than Instagram Plus for $0.
-
-### Invisible story viewing
-Blocks `PolarisStoriesV3SeenMutation` at the network level via Firefox's `webRequest` API. You see stories normally. Your name never appears in the viewer list.
-
-### Automatic story caching without clicking
-The extension extracts story tray user IDs from Instagram's Server-Side Rendered HTML, dynamically extracts GraphQL `doc_id`s from Instagram's JavaScript bundles, and builds its own `PolarisStoriesV3ReelPageGalleryQuery`. Stories are fetched and cached automatically when you load instagram.com. No clicking required.
-
-### Local media download
-Every intercepted story is downloaded to disk: `~/Downloads/ig_stories/<username>/<date>_<mediaId>.jpg` (or `.mp4`). Organized by username, dated. If someone deletes a story 5 minutes after posting, the file is already on your machine.
-
-### Full metadata capture
-Each cached story includes: username, media ID, shortcode, timestamp, expiry time, music title and artist, caption text, audience type (public or close friends), viewer count, and full viewer list with user IDs.
-
-### Deletion detection
-If a story disappears from the feed before its 24h expiry, the extension flags it as deleted with a timestamp. The downloaded file persists. You see what was removed.
-
-### Asymmetric visibility
-The worst finding. The extension blocks YOUR seen receipts to others, but your own story metadata includes `viewer_count` and a full `viewers` array with user IDs. You see who views your stories while being completely invisible when viewing theirs.
-
-### CSV history export
-Every cache update exports a CSV to `ig_stories/history.csv` with columns: `username, media_id, code, type, timestamp, posted_at, expires_at, cached_at, music_title, music_artist, caption, audience, viewer_count, file_path, deleted, deleted_at`.
-
-### Dynamic doc_id extraction
-Instagram identifies GraphQL queries by numeric `doc_id`s that change with deployments. The extension intercepts JS bundles via `StreamFilter` and extracts mappings from the pattern `__d("QueryName_instagramRelayOperation", ... exports="docId")`. No hardcoded IDs that break on the next deploy.
-
-### Auto-fetch with pagination
-After the initial fetch, the extension replays the GalleryQuery every 5 minutes. It paginates automatically using captured pagination templates until all users with active stories are cached.
+- **Automatic story fetching** - extracts tray user IDs from SSR HTML, captures GraphQL `doc_id`s from JS bundles, fires its own GalleryQuery. Stories cached without clicking.
+- **Media download** - every story saved to `ig_stories/<username>/<date>_<id>.jpg|mp4`. If someone deletes a story 5 minutes later, the file is already on disk.
+- **Deletion detection** - if a story disappears before 24h expiry, flagged as deleted. File persists.
+- **Asymmetric visibility** - blocks your receipts but your own story metadata still includes the full viewer list. You see who views you while being invisible viewing others.
+- **CSV export** - timestamped CSV with username, media ID, music, caption, audience, viewer count, deletion status.
+- **Auto-refresh** - replays GalleryQuery every N seconds with pagination.
+- **Persistent state** - story cache and reel IDs survive extension reload via `storage.local`.
 
 ## How it works
 
 ```
 Instagram page load
-    │
-    ├── JS bundles intercepted via StreamFilter
-    │   └── doc_id mappings extracted (QueryName → numeric ID)
-    │
-    ├── SSR HTML parsed by content script
-    │   └── story tray user IDs sent to background
-    │
-    ├── First GraphQL call intercepted
-    │   └── headers captured (CSRF, cookies, session)
-    │
-    ├── Auto GalleryQuery fired
-    │   ├── stories cached + metadata stored
-    │   ├── media downloaded to disk
-    │   ├── CSV exported
-    │   └── pagination triggered for remaining users
-    │
-    └── Ongoing
-        ├── SeenMutation → BLOCKED
-        ├── Auto-fetch every 5 minutes
-        └── Deletion detection on each fetch
+    |
+    |-- content.js extracts tray user IDs from SSR HTML
+    |-- content.js injects inject.js into page context (MAIN world)
+    |
+    |-- background.js intercepts HTTP via webRequest API
+    |   |-- Blocks PolarisStoriesV3SeenMutation (story seen)
+    |   |-- Blocks useIGDMarkThreadAsReadValidationMutation (DM read)
+    |   |-- Intercepts story responses via StreamFilter
+    |   |-- Extracts doc_ids from JS bundles
+    |   |-- Auto-fetches stories, downloads media, exports CSV
+    |   '-- Lets useIGDMarkThreadAsReadMutation through (local read state)
+    |
+    '-- inject.js patches WebSocket.prototype.send in page context
+        |-- Filters typing_activity frames on gateway.instagram.com
+        '-- Filters co_presence heartbeat frames (online status)
 ```
 
-## The real question
+Settings propagation: popup -> background -> content.js -> inject.js (page context) via CustomEvent.
 
-This isn't a bug. This is a design decision. The SeenMutation has been a separate call since Instagram stories launched. Meta's engineering team chose to separate the content fetch from the seen receipt. There are two possible explanations:
+## The $2 billion punchline
 
-**1. It's an oversight.** Meta never noticed that the seen indicator has zero server-side enforcement and can be bypassed by any browser extension. For years. On a platform with 2 billion users. With thousands of engineers. This seems unlikely.
+Instagram is testing [Instagram Plus](https://techcrunch.com/2026/03/30/meta-starts-testing-a-premium-subscription-on-instagram/), a $2/month subscription. The headline feature? Anonymous story viewing. Meta projects [$2.4 billion in annual revenue](https://www.webpronews.com/meta-wants-you-to-pay-for-the-privilege-of-lurking-inside-instagrams-secret-story-viewing-test/) if 1% of users subscribe.
 
-**2. It's intentional.** They always planned to monetize the toggle. The separation between fetch and seen was a business decision from day one. The "seen" indicator was never a privacy guarantee — it was a future revenue stream parked in the architecture, waiting for the right moment to flip the switch and charge for it.
+The product is a `cancel: true` on a GraphQL call. That's the $2.4 billion business. Browser extensions doing this have existed since [2019](https://github.com/haikov/instaghost). Seven years. Nobody noticed. Now Meta wants to charge for it.
 
-In both cases, every user who relied on the "seen" indicator to know if someone viewed their story was trusting a system with zero enforcement. The indicator works only if every viewer uses the unmodified official client and chooses not to block the call. One browser extension and it's gone.
+This extension does everything Instagram Plus does and more. For free. Including things their subscription doesn't offer: DM read blocking, typing indicator blocking, presence blocking, media downloads, deletion detection, CSV export.
 
-Instagram is about to charge $2/month for something that costs one line of JavaScript to do for free. And they've known this the entire time.
+## Prior art
 
-## Install (Firefox)
+| Project | Year | Method | Still works? |
+|---------|------|--------|-------------|
+| [instaghost](https://github.com/haikov/instaghost) | 2019 | Blocks REST `/api/v1/stories/reel/seen` | Probably not |
+| [incognito-viewer](https://github.com/yizzycool/instagram-story-incognito-viewer) | 2023 | Blocks REST seen via `declarativeNetRequest` | Probably not |
+| **This extension** | 2026 | Blocks GraphQL mutations + MQTT WebSocket | **Yes** |
+
+Every prior implementation targets the old REST endpoint. None identified the GraphQL mutations. None handle DMs, typing, or presence. None cache, download, or detect deletions.
+
+## Install
+
+### Temporary (about:debugging)
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on"
-3. Select `manifest.json` from this directory
+3. Select `extension/manifest.json`
+
+### Permanent (signed via AMO)
+
+A signed XPI is available for self-hosting. The extension is submitted to AMO as unlisted. Once signed, install the XPI directly and it persists across browser restarts.
 
 ## Files
 
-| File            | Purpose                                                          |
-| --------------- | ---------------------------------------------------------------- |
-| `manifest.json` | Extension config (MV2, Firefox)                                  |
-| `background.js` | Request interception, caching, auto-fetch, downloads, CSV export |
-| `content.js`    | SSR HTML parsing for tray user IDs                               |
-| `popup.html`    | Cache viewer UI                                                  |
-| `popup.js`      | Popup logic, stats, manual fetch, JSON export                    |
+| File | Purpose |
+|------|---------|
+| `manifest.json` | Extension config (MV2, Firefox, min version 142) |
+| `background.js` | HTTP interception, story caching, auto-fetch, downloads, CSV, settings |
+| `content.js` | SSR HTML parsing, injects inject.js, bridges settings to page context |
+| `inject.js` | Page context (MAIN world) - WebSocket monkey-patch for typing + presence |
+| `popup.html` | UI with stats, toggles, story list, debug log |
+| `popup.js` | Popup logic, settings management, rendering |
 
-## Instagram GraphQL endpoints
+## GraphQL endpoints
 
-| Query                                            | Purpose                           | Blocked?                  |
-| ------------------------------------------------ | --------------------------------- | ------------------------- |
-| `PolarisStoriesV3ReelPageGalleryQuery`           | Fetch stories for multiple users  | No (intercepted + cached) |
-| `PolarisStoriesV3ReelPageGalleryPaginationQuery` | Paginate stories                  | No (intercepted + cached) |
-| `PolarisStoriesV3SeenMutation`                   | Mark story as "seen"              | **YES**                   |
-| `PolarisStoriesV3AdsPoolQuery`                   | Ad pool, contains `tray_user_ids` | No                        |
-| `PolarisStoriesV3TrayContainerQuery`             | Tray container (lazy loaded)      | No                        |
+| Query | Purpose | Action |
+|-------|---------|--------|
+| `PolarisStoriesV3ReelPageGalleryQuery` | Fetch stories | Intercepted + cached |
+| `PolarisStoriesV3ReelPageGalleryPaginationQuery` | Paginate stories | Intercepted + cached |
+| `PolarisStoriesV3SeenMutation` | Mark story as "seen" | **Blocked** |
+| `useIGDMarkThreadAsReadMutation` | Mark DM as read (local) | Allowed through |
+| `useIGDMarkThreadAsReadValidationMutation` | Send "seen" to sender | **Blocked** |
+
+## MQTT WebSocket (gateway.instagram.com)
+
+| Signal | Marker | Action |
+|--------|--------|--------|
+| Typing indicator | `typing_activity`, `is_typing` | **Blocked** |
+| Online presence | `co_presence`, `presence_heartbeat` | **Blocked** (off by default) |
 
 ## Limitations
 
-- First page load requires one GraphQL call to capture headers. Auto-fetch retries until headers are available.
-- Pagination needs a captured template from a story click or auto-fetch response.
-- Some JS bundles cause `NS_ERROR_FAILURE` in StreamFilter when served from browser cache. Harmless.
-- Extension is temporary in Firefox. Requires reload after restart.
-- CDN media URLs expire after hours. Downloaded files persist.
-
-## Why Mexico, Japan, and the Philippines
-
-Instagram Plus is being tested in Mexico, Japan, and the Philippines. Not the EU. Not the US. Countries with weaker privacy regulations.
-
-If Meta launched anonymous story viewing in the EU, it would be an implicit admission that the "seen" indicator was never enforced. Any data protection authority could use that as grounds for a GDPR complaint under Articles [25](https://gdpr-info.eu/art-25-gdpr/) and [32](https://gdpr-info.eu/art-32-gdpr/). By testing outside the EU, Meta avoids setting that precedent.
-
-But the flaw exists everywhere. Every EU user's "seen" indicator is just as broken as every Mexican user's. The only difference is that in Mexico, Meta is honest about it for $2/month. In the EU, they pretend it works.
-
-## A note on intelligence use
-
-The asymmetric visibility feature (see who views your stories while being invisible when viewing theirs) is not just a privacy concern. It's an intelligence tool. Anyone conducting surveillance, social engineering, or HUMINT operations on Instagram can use this architecture to monitor targets without leaving traces, while simultaneously tracking who is monitoring them.
-
-If a state actor, a stalker, or a corporate espionage operator uses this, they get: invisible story viewing, full viewer lists on their own decoy stories, media downloads of deleted content, and timestamped CSV logs. All from a browser extension. No zero-day required. No exploit needed. Just the API working as designed.
-
-I don't know if this was considered when the architecture was designed. But it should be considered now.
-
-## Why I did this
-
-I do security research. I find vulnerabilities, I document them, I build proof of concepts. This is just another research project.
-
-When I heard Instagram was planning to charge people for anonymous story viewing, something felt wrong. People around me were genuinely worried. Some use the "seen" indicator as a safety signal (knowing when someone they blocked on another account is watching them). Some rely on it to know if a message was received. And now Meta is telling them that for $2/month, anyone can bypass that?
-
-So I opened DevTools. And what I found wasn't a complex bypass or a clever exploit. It was a `cancel: true` on a GraphQL call. The most basic interception possible. The "seen" was never enforced. It was never secure. It was just a call that the official client happened to make, and that anyone could stop making at any time.
-
-This isn't about stalking or surveillance. This is about showing that a privacy feature that 2 billion people trust was never real. And now Meta wants to sell the proof.
+- First page load requires one GraphQL call to capture headers
+- Pagination needs a captured template from a story click or auto-fetch
+- Online presence blocking is experimental (markers may need refinement)
+- CDN media URLs expire after hours; downloaded files persist
+- Firefox only (MV2 with `webRequest` blocking)
 
 ## Disclaimer
 
-I built this because I wanted something that actually works, to prove the point and see how far this goes. This is research. I'm not releasing this to cause harm, enable stalking, or mess with anyone's privacy. The goal is to document a real design flaw that affects 2 billion users and that Meta is about to monetize instead of fixing.
-
-All testing was performed on my own account. I'm publishing the code and the findings so people understand what the "seen" indicator actually is (and isn't). If you use this tool to harass, stalk, or violate someone's privacy, that's on you. That's not what this is for.
+This is security research. I built it to document a design flaw that affects 2 billion users and that Meta is monetizing instead of fixing. All testing was performed on my own account. If you use this to harass or stalk someone, that's on you.
