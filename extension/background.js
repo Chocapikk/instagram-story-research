@@ -2,8 +2,9 @@
 // Blocks SeenMutation, caches stories, auto-fetches, downloads media
 
 const SEEN_MUTATION = "PolarisStoriesV3SeenMutation";
+// Only block the validation (sends "seen" to the other person)
+// Let MarkThreadAsRead through so our own UI marks it as read locally
 const DM_READ_MUTATIONS = [
-  "useIGDMarkThreadAsReadMutation",
   "useIGDMarkThreadAsReadValidationMutation"
 ];
 const STORY_QUERIES = [
