@@ -123,11 +123,16 @@ function exportCSV() {
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
 
+  // Remove previous CSV download entry then overwrite the file
+  browser.downloads.search({ query: ["history.csv"] }).then(results => {
+    for (const r of results) browser.downloads.erase({ id: r.id }).catch(_ => {});
+  }).catch(_ => {});
+
   browser.downloads.download({
     url,
     filename: "ig_stories/history.csv",
     saveAs: false,
-    conflictAction: "uniquify"
+    conflictAction: "overwrite"
   }).then(() => {
     console.log("[IG] CSV exported:", rows.length - 1, "entries");
     URL.revokeObjectURL(url);
