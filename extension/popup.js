@@ -1,5 +1,3 @@
-console.log("[Popup] Loaded");
-
 // ---------------------------------------------------------------------------
 // Debug logger
 // ---------------------------------------------------------------------------
@@ -22,6 +20,8 @@ function renderLog() {
   for (const line of logLines) {
     const div = document.createElement("div");
     div.textContent = line;
+    if (line.includes("ERROR")) div.className = "log-error";
+    else if (line.includes("[BG]")) div.className = "log-bg";
     el.appendChild(div);
   }
   el.scrollTop = el.scrollHeight;
@@ -33,96 +33,137 @@ function renderLog() {
 
 async function getCache() {
   try {
-    const response = await browser.runtime.sendMessage({ type: "getCache" });
-    return response?.cache || null;
-  } catch(_) {
-    return null;
-  }
+    return (await browser.runtime.sendMessage({ type: "getCache" }))?.cache || null;
+  } catch(_) { return null; }
 }
 
 async function getStats() {
   try {
     return await browser.runtime.sendMessage({ type: "getStats" });
-  } catch(e) {
-    return { blockedCount: 0, cachedCount: 0, users: 0 };
-  }
+  } catch(_) { return { blockedCount: 0, stories: 0, users: 0 }; }
 }
 
 async function getLogs() {
   try {
-    const resp = await browser.runtime.sendMessage({ type: "getLogs" });
-    return resp?.logs || [];
-  } catch(_) {
-    return [];
-  }
+    return (await browser.runtime.sendMessage({ type: "getLogs" }))?.logs || [];
+  } catch(_) { return []; }
 }
 
 // ---------------------------------------------------------------------------
-// Render
+// Stats bar
 // ---------------------------------------------------------------------------
 
-async function render() {
-  log("Rendering...");
-  const cache = await getCache();
+async function updateStats() {
   const stats = await getStats();
+  document.getElementById("statBlocked").textContent = stats.blockedCount || 0;
+  document.getElementById("statUsers").textContent = stats.users || 0;
+  document.getElementById("statStories").textContent = stats.stories || 0;
+}
+
+// ---------------------------------------------------------------------------
+// Render story list
+// ---------------------------------------------------------------------------
+
+function timeAgo(ts) {
+  const diff = Math.floor((Date.now() / 1000) - ts);
+  if (diff < 60) return diff + "s ago";
+  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+  return Math.floor(diff / 86400) + "d ago";
+}
+
+async function render() {
+  const cache = await getCache();
+  await updateStats();
   const el = document.getElementById("content");
   el.textContent = "";
-
-  const header = document.createElement("div");
-  header.style.cssText = "margin-bottom:8px;color:#8b949e;";
-  header.textContent = "Blocked: " + stats.blockedCount + " seen receipts | Users: " + stats.users;
-  el.appendChild(header);
 
   if (!cache || Object.keys(cache).length === 0) {
     const empty = document.createElement("span");
     empty.className = "empty";
-    empty.textContent = "No stories cached yet. Browse Instagram and click on stories to start capturing.";
+    empty.textContent = "No stories cached yet. Browse Instagram to start.";
     el.appendChild(empty);
     log("Cache empty");
     return;
   }
 
+  // Sort users by most recent story
+  const users = Object.entries(cache)
+    .map(([id, data]) => {
+      const items = Object.values(data.items);
+      const latest = Math.max(...items.map(i => i.timestamp || 0));
+      return { id, data, items, latest };
+    })
+    .filter(u => u.items.length > 0)
+    .sort((a, b) => b.latest - a.latest);
+
   let totalItems = 0;
-  for (const [, data] of Object.entries(cache)) {
-    const items = Object.values(data.items);
-    if (items.length === 0) continue;
+  for (const { data, items } of users) {
     totalItems += items.length;
 
     const userDiv = document.createElement("div");
     userDiv.className = "user";
 
+    const headerDiv = document.createElement("div");
+    headerDiv.className = "user-header";
+
     const nameSpan = document.createElement("span");
     nameSpan.className = "username";
     nameSpan.textContent = "@" + data.username;
-    userDiv.appendChild(nameSpan);
-    userDiv.appendChild(document.createTextNode(" (" + items.length + " stories)"));
-    userDiv.appendChild(document.createElement("br"));
+    headerDiv.appendChild(nameSpan);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "story-count";
+    countSpan.textContent = items.length + (items.length === 1 ? " story" : " stories");
+    headerDiv.appendChild(countSpan);
+
+    userDiv.appendChild(headerDiv);
 
     items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     for (const item of items) {
-      const time = item.timestamp ? new Date(item.timestamp * 1000).toLocaleString() : "?";
       const type = item.type || "image";
 
       const itemDiv = document.createElement("div");
       itemDiv.className = "item";
 
-      let text = type + " | " + time;
+      // Type badge
+      const typeBadge = document.createElement("span");
+      typeBadge.className = "item-type " + type;
+      typeBadge.textContent = type === "video" ? "VID" : "IMG";
+      itemDiv.appendChild(typeBadge);
+
+      // Time
+      if (item.timestamp) {
+        const timeSpan = document.createElement("span");
+        timeSpan.textContent = timeAgo(item.timestamp);
+        itemDiv.appendChild(timeSpan);
+      }
+
+      // Deleted
       if (item.deleted) {
         const del = document.createElement("span");
         del.className = "deleted";
-        del.textContent = " [DELETED]";
-        itemDiv.appendChild(document.createTextNode(text));
+        del.textContent = "DELETED";
         itemDiv.appendChild(del);
-      } else {
-        itemDiv.appendChild(document.createTextNode(text));
       }
 
+      // Music
       if (item.music_title) {
-        itemDiv.appendChild(document.createTextNode(" \u266A " + item.music_title + (item.music_artist ? " - " + item.music_artist : "") + " "));
+        const music = document.createElement("span");
+        music.className = "music";
+        music.textContent = "\u266A " + item.music_title + (item.music_artist ? " - " + item.music_artist : "");
+        itemDiv.appendChild(music);
       }
+
+      // Caption
       if (item.caption) {
-        itemDiv.appendChild(document.createTextNode(' "' + item.caption.substring(0, 50) + '" '));
+        const cap = document.createElement("span");
+        cap.className = "caption-text";
+        cap.textContent = '"' + item.caption.substring(0, 40) + (item.caption.length > 40 ? '...' : '') + '"';
+        itemDiv.appendChild(cap);
       }
+
+      // Open link
       if (item.url) {
         const link = document.createElement("a");
         link.className = "media-link";
@@ -132,16 +173,17 @@ async function render() {
         itemDiv.appendChild(link);
       }
 
+      // Cached time
       const cached = document.createElement("span");
       cached.className = "cached";
-      cached.textContent = " cached " + new Date(item.cached_at).toLocaleTimeString();
+      cached.textContent = new Date(item.cached_at).toLocaleTimeString();
       itemDiv.appendChild(cached);
 
       userDiv.appendChild(itemDiv);
     }
     el.appendChild(userDiv);
   }
-  log("Rendered " + totalItems + " stories from " + stats.users + " users");
+  log("Rendered " + totalItems + " stories / " + users.length + " users");
 }
 
 // ---------------------------------------------------------------------------
@@ -165,11 +207,15 @@ async function syncLogs() {
 
 document.getElementById("refresh").addEventListener("click", async () => {
   log("Triggering fetch...");
+  const btn = document.getElementById("refresh");
+  btn.textContent = "Fetching...";
+  btn.disabled = true;
   await browser.runtime.sendMessage({ type: "triggerFetch" });
-  log("Fetch triggered, waiting 3s...");
   setTimeout(async () => {
     await syncLogs();
     await render();
+    btn.textContent = "Refresh";
+    btn.disabled = false;
     log("Refresh complete");
   }, 3000);
 });
@@ -212,7 +258,7 @@ async function loadSettings() {
       document.getElementById("autoFetch").checked = resp.autoFetch !== false;
       document.getElementById("autoDownload").checked = resp.autoDownload !== false;
       if (resp.fetchInterval) document.getElementById("interval").value = resp.fetchInterval;
-      log("Settings loaded: blockSeen=" + (resp.blockSeen !== false) + " autoFetch=" + (resp.autoFetch !== false) + " autoDownload=" + (resp.autoDownload !== false));
+      log("Settings loaded");
     }
   } catch(_) {
     log("Failed to load settings");
@@ -227,7 +273,7 @@ document.getElementById("saveSettings").addEventListener("click", async () => {
     fetchInterval: parseInt(document.getElementById("interval").value) || 300
   };
   await browser.runtime.sendMessage({ type: "saveSettings", settings });
-  log("Settings saved: " + JSON.stringify(settings));
+  log("Settings saved");
 });
 
 // ---------------------------------------------------------------------------
