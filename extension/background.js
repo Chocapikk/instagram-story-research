@@ -20,8 +20,19 @@ let settings = {
 // Load settings on startup
 browser.storage.local.get("settings").then(result => {
   if (result.settings) settings = { ...settings, ...result.settings };
-  console.log("[IG] Settings loaded:", settings);
+  bglog("Settings loaded: " + JSON.stringify(settings));
 });
+
+// Debug log buffer (shared with popup)
+const bgLog = [];
+function bglog(...args) {
+  const msg = args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" ");
+  const ts = new Date().toLocaleTimeString();
+  const line = "[" + ts + "] [BG] " + msg;
+  bgLog.push(line);
+  if (bgLog.length > 200) bgLog.shift();
+  console.log("[IG]", msg);
+}
 
 // State
 let storyCache = {};
@@ -134,7 +145,7 @@ function exportCSV() {
     saveAs: false,
     conflictAction: "overwrite"
   }).then(() => {
-    console.log("[IG] CSV exported:", rows.length - 1, "entries");
+    bglog("CSV exported:", rows.length - 1, "entries");
     URL.revokeObjectURL(url);
   }).catch(_ => {});
 }
@@ -143,8 +154,8 @@ function downloadMedia(username, mediaId, url, ext) {
   const date = new Date().toISOString().split("T")[0];
   const filename = "ig_stories/" + username + "/" + date + "_" + mediaId + "." + ext;
   browser.downloads.download({ url, filename, saveAs: false, conflictAction: "uniquify" })
-    .then(() => console.log("[IG] Downloaded:", filename))
-    .catch(e => console.error("[IG] Download failed:", username, e.message));
+    .then(() => bglog("Downloaded:", filename))
+    .catch(e => bglog("ERROR: Download failed:", username, e.message));
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +176,7 @@ browser.webRequest.onBeforeRequest.addListener(
     // Block seen mutation (if enabled)
     if (settings.blockSeen && body.includes(SEEN_MUTATION)) {
       blockedCount++;
-      console.log("[IG] Blocked SeenMutation #" + blockedCount);
+      bglog("Blocked SeenMutation #" + blockedCount);
       return { cancel: true };
     }
 
@@ -177,20 +188,20 @@ browser.webRequest.onBeforeRequest.addListener(
     // Capture gallery query for auto-fetch replay
     if (body.includes("PolarisStoriesV3ReelPageGalleryQuery") && !lastQueryBody) {
       lastQueryBody = body;
-      console.log("[IG] Captured GalleryQuery for replay");
+      bglog("Captured GalleryQuery for replay");
       startAutoFetch();
     }
 
     // Intercept story responses via StreamFilter
     if (STORY_QUERIES.some(q => body.includes(q))) {
-      console.log("[IG] Story query detected, capturing response...");
+      bglog("Story query detected, capturing response...");
       const filter = browser.webRequest.filterResponseData(details.requestId);
       const chunks = [];
       filter.ondata = (event) => { chunks.push(new Uint8Array(event.data)); filter.write(event.data); };
       filter.onstop = () => {
         filter.close();
         try { processStoryData(JSON.parse(mergeChunks(chunks))); }
-        catch (e) { console.error("[IG] Parse error:", e.message?.substring(0, 100)); }
+        catch (e) { bglog("ERROR: Parse error:", e.message?.substring(0, 100)); }
       };
       filter.onerror = () => { try { filter.close(); } catch(_) {} };
     }
@@ -277,7 +288,7 @@ function processStoryData(data) {
   if (missing.length > 0 && lastPaginationBody) fetchMissingReels(missing);
 
   const s = cacheStats();
-  console.log("[IG] Cached " + reels.length + " reels | " + s.users + " users | " + s.stories + " stories");
+  bglog("Cached " + reels.length + " reels | " + s.users + " users | " + s.stories + " stories");
   exportCSV();
 }
 
@@ -288,18 +299,18 @@ function processStoryData(data) {
 function tryAutoFetch() {
   if (!pendingTrayIds?.length) return;
   if (!lastQueryHeaders["Cookie"]) {
-    if (++autoFetchRetries > 10) return console.log("[IG] Gave up waiting for headers");
-    console.log("[IG] Waiting for headers... retry", autoFetchRetries);
+    if (++autoFetchRetries > 10) return bglog("Gave up waiting for headers");
+    bglog("Waiting for headers... retry", autoFetchRetries);
     return setTimeout(tryAutoFetch, 2000);
   }
-  console.log("[IG] Headers ready, firing auto GalleryQuery");
+  bglog("Headers ready, firing auto GalleryQuery");
   buildAndFireGalleryQuery(pendingTrayIds);
   pendingTrayIds = null;
   autoFetchRetries = 0;
 }
 
 async function buildAndFireGalleryQuery(trayIds) {
-  console.log("[IG] Building GalleryQuery for", trayIds.length, "users");
+  bglog("Building GalleryQuery for", trayIds.length, "users");
   const params = new URLSearchParams();
   params.set("fb_api_req_friendly_name", "PolarisStoriesV3ReelPageGalleryQuery");
   params.set("variables", JSON.stringify({ initial_reel_id: trayIds[0], reel_ids: trayIds, first: 3 }));
@@ -312,9 +323,9 @@ async function buildAndFireGalleryQuery(trayIds) {
     processStoryData(data);
     lastQueryBody = params.toString();
     startAutoFetch();
-    console.log("[IG] Auto GalleryQuery complete");
+    bglog("Auto GalleryQuery complete");
   } catch (e) {
-    console.error("[IG] Auto GalleryQuery failed:", e);
+    bglog("ERROR: Auto GalleryQuery failed:", e);
   }
 }
 
@@ -341,11 +352,11 @@ async function fetchMissingReels(missingIds) {
 
       processStoryData(data);
       const s = cacheStats();
-      console.log("[IG] Page", page, "| hasNext:", hasNext, "|", s.users, "users,", s.stories, "stories");
+      bglog("Page", page, "| hasNext:", hasNext, "|", s.users, "users,", s.stories, "stories");
       cursor = hasNext && nextCursor ? nextCursor : null;
       await new Promise(r => setTimeout(r, 1500));
     } catch (e) {
-      console.error("[IG] Pagination failed:", e);
+      bglog("ERROR: Pagination failed:", e);
       break;
     }
   }
@@ -358,18 +369,18 @@ function startAutoFetch() {
   const delay = settings.fetchInterval || AUTO_FETCH_DELAY;
   autoFetchInterval = setInterval(async () => {
     if (!settings.autoFetch || !lastQueryBody || !lastQueryHeaders["Cookie"]) return;
-    console.log("[IG] Auto-fetch: replaying GalleryQuery...");
+    bglog("Auto-fetch: replaying GalleryQuery...");
     try {
       const data = await (await fetch("https://www.instagram.com/graphql/query", {
         method: "POST", headers: buildHeaders(), body: lastQueryBody, credentials: "include"
       })).json();
       processStoryData(data);
-      console.log("[IG] Auto-fetch complete");
+      bglog("Auto-fetch complete");
     } catch (e) {
-      console.error("[IG] Auto-fetch failed:", e);
+      bglog("ERROR: Auto-fetch failed:", e);
     }
   }, delay * 1000);
-  console.log("[IG] Auto-fetch started, interval:", delay + "s");
+  bglog("Auto-fetch started, interval:", delay + "s");
 }
 
 function restartAutoFetch() {
@@ -392,7 +403,7 @@ browser.webRequest.onBeforeRequest.addListener(
       const re = /__d\("(\w+)_instagramRelayOperation",[^)]*\(function\([^)]*\)\{[^}]*\.exports="(\d+)"/g;
       let m, found = 0;
       while ((m = re.exec(text)) !== null) { capturedDocIds[m[1]] = m[2]; found++; }
-      if (found > 0) console.log("[IG] Extracted", found, "doc_ids from bundle");
+      if (found > 0) bglog("Extracted", found, "doc_ids from bundle");
     };
     filter.onerror = () => { try { filter.close(); } catch(_) {} };
   },
@@ -409,27 +420,28 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "getStats") sendResponse({ blockedCount, ...cacheStats() });
   if (msg.type === "trayUserIds") {
     const ids = msg.users.map(u => u.id);
-    console.log("[IG] Got", ids.length, "tray user IDs from content script");
+    bglog("Got", ids.length, "tray user IDs from content script");
     allReelIds = [...new Set([...allReelIds, ...ids])];
     pendingTrayIds = ids;
     tryAutoFetch();
     sendResponse({ ok: true });
   }
   if (msg.type === "triggerFetch") {
-    console.log("[IG] Manual fetch triggered");
+    bglog("Manual fetch triggered");
     if (allReelIds.length > 0) buildAndFireGalleryQuery(allReelIds);
     sendResponse({ ok: true });
   }
   if (msg.type === "clearCache") { storyCache = {}; sendResponse({ ok: true }); }
+  if (msg.type === "getLogs") sendResponse({ logs: [...bgLog] });
   if (msg.type === "getSettings") sendResponse(settings);
   if (msg.type === "saveSettings") {
     settings = { ...settings, ...msg.settings };
     browser.storage.local.set({ settings });
     restartAutoFetch();
-    console.log("[IG] Settings saved:", settings);
+    bglog("Settings saved:", settings);
     sendResponse({ ok: true });
   }
   return true;
 });
 
-console.log("[IG] Background loaded");
+bglog("Background loaded");

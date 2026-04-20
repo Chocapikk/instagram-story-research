@@ -1,9 +1,39 @@
 console.log("[Popup] Loaded");
 
+// ---------------------------------------------------------------------------
+// Debug logger
+// ---------------------------------------------------------------------------
+
+const logLines = [];
+
+function log(msg) {
+  const ts = new Date().toLocaleTimeString();
+  const line = "[" + ts + "] " + msg;
+  logLines.push(line);
+  if (logLines.length > 200) logLines.shift();
+  console.log("[Popup]", msg);
+  renderLog();
+}
+
+function renderLog() {
+  const el = document.getElementById("log");
+  if (!el) return;
+  el.textContent = "";
+  for (const line of logLines) {
+    const div = document.createElement("div");
+    div.textContent = line;
+    el.appendChild(div);
+  }
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Background comms
+// ---------------------------------------------------------------------------
+
 async function getCache() {
   try {
     const response = await browser.runtime.sendMessage({ type: "getCache" });
-    console.log("[Popup] Got cache:", response);
     return response?.cache || null;
   } catch(_) {
     return null;
@@ -18,14 +48,21 @@ async function getStats() {
   }
 }
 
-function esc(text) {
-  const d = document.createElement("div");
-  d.textContent = text;
-  return d.innerHTML;
+async function getLogs() {
+  try {
+    const resp = await browser.runtime.sendMessage({ type: "getLogs" });
+    return resp?.logs || [];
+  } catch(_) {
+    return [];
+  }
 }
 
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+
 async function render() {
-  console.log("[Popup] Rendering...");
+  log("Rendering...");
   const cache = await getCache();
   const stats = await getStats();
   const el = document.getElementById("content");
@@ -41,12 +78,15 @@ async function render() {
     empty.className = "empty";
     empty.textContent = "No stories cached yet. Browse Instagram and click on stories to start capturing.";
     el.appendChild(empty);
+    log("Cache empty");
     return;
   }
 
+  let totalItems = 0;
   for (const [, data] of Object.entries(cache)) {
     const items = Object.values(data.items);
     if (items.length === 0) continue;
+    totalItems += items.length;
 
     const userDiv = document.createElement("div");
     userDiv.className = "user";
@@ -101,24 +141,50 @@ async function render() {
     }
     el.appendChild(userDiv);
   }
+  log("Rendered " + totalItems + " stories from " + stats.users + " users");
 }
 
+// ---------------------------------------------------------------------------
+// Fetch background logs
+// ---------------------------------------------------------------------------
+
+async function syncLogs() {
+  const bgLogs = await getLogs();
+  for (const msg of bgLogs) {
+    if (!logLines.includes(msg)) {
+      logLines.push(msg);
+      if (logLines.length > 200) logLines.shift();
+    }
+  }
+  renderLog();
+}
+
+// ---------------------------------------------------------------------------
+// Buttons
+// ---------------------------------------------------------------------------
+
 document.getElementById("refresh").addEventListener("click", async () => {
-  console.log("[Popup] Refresh clicked");
+  log("Triggering fetch...");
   await browser.runtime.sendMessage({ type: "triggerFetch" });
-  setTimeout(render, 3000);
+  log("Fetch triggered, waiting 3s...");
+  setTimeout(async () => {
+    await syncLogs();
+    await render();
+    log("Refresh complete");
+  }, 3000);
 });
 
 document.getElementById("clear").addEventListener("click", async () => {
-  console.log("[Popup] Clear clicked");
+  log("Clearing cache...");
   await browser.runtime.sendMessage({ type: "clearCache" });
-  render();
+  await render();
+  log("Cache cleared");
 });
 
 document.getElementById("export").addEventListener("click", async () => {
-  console.log("[Popup] Export clicked");
+  log("Exporting JSON...");
   const cache = await getCache();
-  if (!cache) return;
+  if (!cache) { log("Nothing to export"); return; }
   const blob = new Blob([JSON.stringify(cache, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -126,9 +192,18 @@ document.getElementById("export").addEventListener("click", async () => {
   a.download = "ig_story_cache_" + Date.now() + ".json";
   a.click();
   URL.revokeObjectURL(url);
+  log("JSON exported");
 });
 
-// Load settings into checkboxes
+document.getElementById("clearLog").addEventListener("click", () => {
+  logLines.length = 0;
+  renderLog();
+});
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
 async function loadSettings() {
   try {
     const resp = await browser.runtime.sendMessage({ type: "getSettings" });
@@ -137,8 +212,11 @@ async function loadSettings() {
       document.getElementById("autoFetch").checked = resp.autoFetch !== false;
       document.getElementById("autoDownload").checked = resp.autoDownload !== false;
       if (resp.fetchInterval) document.getElementById("interval").value = resp.fetchInterval;
+      log("Settings loaded: blockSeen=" + (resp.blockSeen !== false) + " autoFetch=" + (resp.autoFetch !== false) + " autoDownload=" + (resp.autoDownload !== false));
     }
-  } catch(_) {}
+  } catch(_) {
+    log("Failed to load settings");
+  }
 }
 
 document.getElementById("saveSettings").addEventListener("click", async () => {
@@ -149,7 +227,14 @@ document.getElementById("saveSettings").addEventListener("click", async () => {
     fetchInterval: parseInt(document.getElementById("interval").value) || 300
   };
   await browser.runtime.sendMessage({ type: "saveSettings", settings });
+  log("Settings saved: " + JSON.stringify(settings));
 });
 
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+
 loadSettings();
+syncLogs();
 render();
+log("Popup ready");
