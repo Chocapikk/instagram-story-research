@@ -445,7 +445,23 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (allReelIds.length > 0) {
       buildAndFireGalleryQuery(allReelIds);
     } else {
-      bglog("No reel IDs available. Browse Instagram first or click on stories.");
+      bglog("No reel IDs, asking content script to extract...");
+      browser.tabs.query({ url: "https://www.instagram.com/*" }).then(tabs => {
+        if (tabs.length === 0) {
+          bglog("No Instagram tab found");
+          return;
+        }
+        browser.tabs.sendMessage(tabs[0].id, { type: "extractTray" }).then(resp => {
+          if (resp?.users?.length) {
+            allReelIds = [...new Set([...allReelIds, ...resp.users.map(u => u.id)])];
+            browser.storage.local.set({ reelIds: allReelIds });
+            bglog("Got", allReelIds.length, "IDs from content script, fetching...");
+            buildAndFireGalleryQuery(allReelIds);
+          } else {
+            bglog("Content script found no tray users");
+          }
+        }).catch(e => bglog("Content script error:", e.message));
+      });
     }
     sendResponse({ ok: true });
   }

@@ -43,6 +43,16 @@ function init() {
   }
 }
 
+// Listen for on-demand extraction from background/popup
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "extractTray") {
+    const users = extractTrayUserIds();
+    console.log("[IG Content] On-demand extraction:", users.length, "users");
+    sendResponse({ users });
+  }
+  return true;
+});
+
 if (document.readyState === "complete") {
   init();
 } else {
