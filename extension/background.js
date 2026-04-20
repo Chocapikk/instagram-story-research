@@ -322,23 +322,45 @@ function tryAutoFetch() {
   autoFetchRetries = 0;
 }
 
+let selfFetchIds = new Set();
+
 async function buildAndFireGalleryQuery(trayIds) {
   bglog("Building GalleryQuery for", trayIds.length, "users");
+
+  // If we don't have headers yet, try extracting from the IG page
+  if (!lastQueryHeaders["X-CSRFToken"]) {
+    bglog("No CSRF token yet, extracting from Instagram tab...");
+    try {
+      const tabs = await browser.tabs.query({ url: "https://www.instagram.com/*" });
+      if (tabs.length > 0) {
+        const resp = await browser.tabs.sendMessage(tabs[0].id, { type: "extractHeaders" });
+        if (resp?.csrf) {
+          lastQueryHeaders["X-CSRFToken"] = resp.csrf;
+          if (resp.lsd) lastQueryHeaders["X-FB-LSD"] = resp.lsd;
+          bglog("Got CSRF from content script");
+        }
+      }
+    } catch(_) {}
+  }
+
   const params = new URLSearchParams();
   params.set("fb_api_req_friendly_name", "PolarisStoriesV3ReelPageGalleryQuery");
   params.set("variables", JSON.stringify({ initial_reel_id: trayIds[0], reel_ids: trayIds, first: 3 }));
   params.set("doc_id", galleryDocId());
 
   try {
-    const data = await (await fetch("https://www.instagram.com/graphql/query", {
+    const resp = await fetch("https://www.instagram.com/graphql/query", {
       method: "POST", headers: buildHeaders(), body: params.toString(), credentials: "include"
-    })).json();
+    });
+    const text = await resp.text();
+    bglog("GalleryQuery response status:", resp.status, "length:", text.length);
+    const data = JSON.parse(text);
     processStoryData(data);
     lastQueryBody = params.toString();
     startAutoFetch();
     bglog("Auto GalleryQuery complete");
   } catch (e) {
-    bglog("ERROR: Auto GalleryQuery failed:", e);
+    bglog("ERROR: Auto GalleryQuery failed:", e.message || e);
   }
 }
 

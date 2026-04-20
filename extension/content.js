@@ -43,12 +43,33 @@ function init() {
   }
 }
 
+function extractHeaders() {
+  // CSRF token from cookie
+  const csrf = document.cookie.split(";").map(c => c.trim()).find(c => c.startsWith("csrftoken="));
+  const csrfVal = csrf ? csrf.split("=")[1] : "";
+
+  // LSD token from page HTML
+  let lsd = "";
+  const scripts = document.querySelectorAll("script");
+  for (const s of scripts) {
+    const m = s.textContent.match(/"LSD",\[\],\{"token":"([^"]+)"/);
+    if (m) { lsd = m[1]; break; }
+  }
+
+  return { csrf: csrfVal, lsd };
+}
+
 // Listen for on-demand extraction from background/popup
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "extractTray") {
     const users = extractTrayUserIds();
     console.log("[IG Content] On-demand extraction:", users.length, "users");
     sendResponse({ users });
+  }
+  if (msg.type === "extractHeaders") {
+    const headers = extractHeaders();
+    console.log("[IG Content] Headers extracted, csrf:", headers.csrf ? "yes" : "no");
+    sendResponse(headers);
   }
   return true;
 });
