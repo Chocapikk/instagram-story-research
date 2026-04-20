@@ -165,19 +165,24 @@ function exportCSV() {
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
 
-  // Remove previous CSV download entry then overwrite the file
-  browser.downloads.search({ query: ["history.csv"] }).then(results => {
-    for (const r of results) browser.downloads.erase({ id: r.id }).catch(_ => {});
-  }).catch(_ => {});
-
-  browser.downloads.download({
-    url,
-    filename: "ig_stories/history.csv",
-    saveAs: false,
-    conflictAction: "overwrite"
-  }).then(() => {
-    bglog("CSV exported:", rows.length - 1, "entries");
-    URL.revokeObjectURL(url);
+  // Remove ALL previous CSV downloads (entries + files) then write fresh
+  browser.downloads.search({ query: ["history"] }).then(async (results) => {
+    for (const r of results) {
+      if (r.filename && r.filename.includes("history")) {
+        try { await browser.downloads.removeFile(r.id); } catch(_) {}
+        try { await browser.downloads.erase({ id: r.id }); } catch(_) {}
+      }
+    }
+    // Write new CSV after cleanup
+    browser.downloads.download({
+      url,
+      filename: "ig_stories/history.csv",
+      saveAs: false,
+      conflictAction: "overwrite"
+    }).then(() => {
+      bglog("CSV exported:", rows.length - 1, "entries");
+      URL.revokeObjectURL(url);
+    }).catch(_ => {});
   }).catch(_ => {});
 }
 
