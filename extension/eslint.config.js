@@ -1,4 +1,4 @@
-export default [
+module.exports = [
   {
     languageOptions: {
       ecmaVersion: 2022,
@@ -21,7 +21,20 @@ export default [
         Response: "readonly",
         Promise: "readonly",
         Set: "readonly",
-        JSON: "readonly"
+        JSON: "readonly",
+        CustomEvent: "readonly",
+        WebSocket: "readonly",
+        ArrayBuffer: "readonly",
+        clearTimeout: "readonly",
+        Map: "readonly",
+        WeakSet: "readonly",
+        TextEncoder: "readonly",
+        Headers: "readonly",
+        chrome: "readonly",
+        Object: "readonly",
+        Date: "readonly",
+        Math: "readonly",
+        HTMLElement: "readonly"
       }
     },
     rules: {

@@ -237,7 +237,7 @@ browser.webRequest.onBeforeRequest.addListener(
         }
         browser.storage.local.set({ storyCache, seenHistory });
         bglog("Seen sent for reel", reelId);
-      } catch(_) {}
+      }
     }
 
     // Block DM read receipts (if enabled)
