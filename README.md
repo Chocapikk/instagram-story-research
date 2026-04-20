@@ -26,6 +26,8 @@ Every single "privacy signal" on Instagram is client-side trust with zero server
 - **CSV export** - timestamped CSV with username, media ID, music, caption, audience, viewer count, deletion status.
 - **Auto-refresh** - replays GalleryQuery every N seconds with pagination.
 - **Persistent state** - story cache and reel IDs survive extension reload via `storage.local`.
+- **Story browser** - dedicated tab with grid layout, search by username, expandable metadata panels (media ID, timestamps, dimensions, music, audience, viewer count, local file path), image/video lightbox with info overlay, and direct links to open local files or CDN URLs.
+- **System theme** - follows OS dark/light preference automatically.
 
 ## How it works
 
@@ -88,8 +90,10 @@ A signed XPI is available for self-hosting. The extension is submitted to AMO as
 | `background.js` | HTTP interception, story caching, auto-fetch, downloads, CSV, settings |
 | `content.js` | SSR HTML parsing, injects inject.js, bridges settings to page context |
 | `inject.js` | Page context (MAIN world) - WebSocket monkey-patch for typing + presence |
-| `popup.html` | UI with stats, toggles, story list, debug log |
-| `popup.js` | Popup logic, settings management, rendering |
+| `popup.html` | Compact popup with stats, toggles, debug log |
+| `popup.js` | Popup logic, settings management |
+| `stories.html` | Full-tab story browser with grid view, search, lightbox |
+| `stories.js` | Story browser logic, metadata panels, local file viewer |
 
 ## GraphQL endpoints
 
