@@ -18,53 +18,89 @@ async function getStats() {
   }
 }
 
+function esc(text) {
+  const d = document.createElement("div");
+  d.textContent = text;
+  return d.innerHTML;
+}
+
 async function render() {
   console.log("[Popup] Rendering...");
   const cache = await getCache();
   const stats = await getStats();
   const el = document.getElementById("content");
+  el.textContent = "";
 
-  const header = "<div style='margin-bottom:8px;color:#8b949e;'>" +
-    "Blocked: " + stats.blockedCount + " seen receipts | " +
-    "Users: " + stats.users +
-    "</div>";
+  const header = document.createElement("div");
+  header.style.cssText = "margin-bottom:8px;color:#8b949e;";
+  header.textContent = "Blocked: " + stats.blockedCount + " seen receipts | Users: " + stats.users;
+  el.appendChild(header);
 
   if (!cache || Object.keys(cache).length === 0) {
-    el.innerHTML = header + '<span class="empty">No stories cached yet. Browse Instagram and click on stories to start capturing.</span>';
+    const empty = document.createElement("span");
+    empty.className = "empty";
+    empty.textContent = "No stories cached yet. Browse Instagram and click on stories to start capturing.";
+    el.appendChild(empty);
     return;
   }
 
-  let html = header;
   for (const [, data] of Object.entries(cache)) {
     const items = Object.values(data.items);
     if (items.length === 0) continue;
 
-    html += '<div class="user">';
-    html += '<span class="username">@' + data.username + '</span> (' + items.length + ' stories)<br>';
+    const userDiv = document.createElement("div");
+    userDiv.className = "user";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "username";
+    nameSpan.textContent = "@" + data.username;
+    userDiv.appendChild(nameSpan);
+    userDiv.appendChild(document.createTextNode(" (" + items.length + " stories)"));
+    userDiv.appendChild(document.createElement("br"));
 
     items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     for (const item of items) {
       const time = item.timestamp ? new Date(item.timestamp * 1000).toLocaleString() : "?";
       const type = item.type || "image";
-      const status = item.deleted ? ' <span class="deleted">[DELETED]</span>' : "";
 
-      html += '<div class="item">';
-      html += type + " | " + time + status + " ";
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "item";
+
+      let text = type + " | " + time;
+      if (item.deleted) {
+        const del = document.createElement("span");
+        del.className = "deleted";
+        del.textContent = " [DELETED]";
+        itemDiv.appendChild(document.createTextNode(text));
+        itemDiv.appendChild(del);
+      } else {
+        itemDiv.appendChild(document.createTextNode(text));
+      }
+
       if (item.music_title) {
-        html += '♪ ' + item.music_title + (item.music_artist ? ' - ' + item.music_artist : '') + ' ';
+        itemDiv.appendChild(document.createTextNode(" \u266A " + item.music_title + (item.music_artist ? " - " + item.music_artist : "") + " "));
       }
       if (item.caption) {
-        html += '"' + item.caption.substring(0, 50) + '" ';
+        itemDiv.appendChild(document.createTextNode(' "' + item.caption.substring(0, 50) + '" '));
       }
       if (item.url) {
-        html += '<a class="media-link" href="' + item.url + '" target="_blank">open</a>';
+        const link = document.createElement("a");
+        link.className = "media-link";
+        link.href = item.url;
+        link.target = "_blank";
+        link.textContent = "open";
+        itemDiv.appendChild(link);
       }
-      html += ' <span class="cached">cached ' + new Date(item.cached_at).toLocaleTimeString() + "</span>";
-      html += "</div>";
+
+      const cached = document.createElement("span");
+      cached.className = "cached";
+      cached.textContent = " cached " + new Date(item.cached_at).toLocaleTimeString();
+      itemDiv.appendChild(cached);
+
+      userDiv.appendChild(itemDiv);
     }
-    html += "</div>";
+    el.appendChild(userDiv);
   }
-  el.innerHTML = html;
 }
 
 document.getElementById("refresh").addEventListener("click", async () => {
