@@ -9,6 +9,20 @@ const STORY_QUERIES = [
 const AUTO_FETCH_DELAY = 300;
 const GALLERY_DOC_ID_FALLBACK = "25869747379387218";
 
+// Settings (persisted via storage.local)
+let settings = {
+  blockSeen: true,
+  autoFetch: true,
+  autoDownload: true,
+  fetchInterval: 300
+};
+
+// Load settings on startup
+browser.storage.local.get("settings").then(result => {
+  if (result.settings) settings = { ...settings, ...result.settings };
+  console.log("[IG] Settings loaded:", settings);
+});
+
 // State
 let storyCache = {};
 let blockedCount = 0;
@@ -143,8 +157,8 @@ browser.webRequest.onBeforeRequest.addListener(
     const docMatch = body.match(/doc_id=(\d+)/);
     if (fnMatch && docMatch) capturedDocIds[fnMatch[1]] = docMatch[1];
 
-    // Block seen mutation
-    if (body.includes(SEEN_MUTATION)) {
+    // Block seen mutation (if enabled)
+    if (settings.blockSeen && body.includes(SEEN_MUTATION)) {
       blockedCount++;
       console.log("[IG] Blocked SeenMutation #" + blockedCount);
       return { cancel: true };
@@ -231,7 +245,7 @@ function processStoryData(data) {
       const music = item.story_music_stickers?.[0]?.music_asset_info;
       const isVideo = !!(item.has_audio || item.video_versions?.length);
 
-      if (url) downloadMedia(username, mediaId, url, isVideo ? "mp4" : "jpg");
+      if (url && settings.autoDownload) downloadMedia(username, mediaId, url, isVideo ? "mp4" : "jpg");
 
       storyCache[userId].items[mediaId] = {
         id: mediaId, code: item.code || null, url,
@@ -335,8 +349,10 @@ async function fetchMissingReels(missingIds) {
 
 function startAutoFetch() {
   if (autoFetchInterval) return;
+  if (!settings.autoFetch) return;
+  const delay = settings.fetchInterval || AUTO_FETCH_DELAY;
   autoFetchInterval = setInterval(async () => {
-    if (!lastQueryBody || !lastQueryHeaders["Cookie"]) return;
+    if (!settings.autoFetch || !lastQueryBody || !lastQueryHeaders["Cookie"]) return;
     console.log("[IG] Auto-fetch: replaying GalleryQuery...");
     try {
       const data = await (await fetch("https://www.instagram.com/graphql/query", {
@@ -347,8 +363,13 @@ function startAutoFetch() {
     } catch (e) {
       console.error("[IG] Auto-fetch failed:", e);
     }
-  }, AUTO_FETCH_DELAY * 1000);
-  console.log("[IG] Auto-fetch started, interval:", AUTO_FETCH_DELAY + "s");
+  }, delay * 1000);
+  console.log("[IG] Auto-fetch started, interval:", delay + "s");
+}
+
+function restartAutoFetch() {
+  if (autoFetchInterval) { clearInterval(autoFetchInterval); autoFetchInterval = null; }
+  if (settings.autoFetch) startAutoFetch();
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +416,14 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true });
   }
   if (msg.type === "clearCache") { storyCache = {}; sendResponse({ ok: true }); }
+  if (msg.type === "getSettings") sendResponse(settings);
+  if (msg.type === "saveSettings") {
+    settings = { ...settings, ...msg.settings };
+    browser.storage.local.set({ settings });
+    restartAutoFetch();
+    console.log("[IG] Settings saved:", settings);
+    sendResponse({ ok: true });
+  }
   return true;
 });
 

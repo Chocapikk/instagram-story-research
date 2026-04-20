@@ -25,8 +25,10 @@
     <button id="export">Export JSON</button>
   </div>
   <div class="settings">
-    <label><input type="checkbox" id="autoFetch" checked> Auto-fetch</label>
-    <label>every <input type="number" id="interval" value="300" min="60" max="3600" style="width:50px;background:#333;color:#fff;border:1px solid #555;"> sec</label>
+    <label><input type="checkbox" id="blockSeen" checked> Block seen receipts</label><br>
+    <label><input type="checkbox" id="autoFetch" checked> Auto-fetch stories</label><br>
+    <label><input type="checkbox" id="autoDownload" checked> Auto-download media</label><br>
+    <label>Fetch every <input type="number" id="interval" value="300" min="60" max="3600" style="width:50px;background:#333;color:#fff;border:1px solid #555;"> sec</label>
     <button id="saveSettings">Save</button>
   </div>
   <div id="content"><span class="empty">No stories cached yet. Browse Instagram to start capturing.</span></div>

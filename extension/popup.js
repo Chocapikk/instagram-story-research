@@ -92,4 +92,28 @@ document.getElementById("export").addEventListener("click", async () => {
   URL.revokeObjectURL(url);
 });
 
+// Load settings into checkboxes
+async function loadSettings() {
+  try {
+    const resp = await browser.runtime.sendMessage({ type: "getSettings" });
+    if (resp) {
+      document.getElementById("blockSeen").checked = resp.blockSeen !== false;
+      document.getElementById("autoFetch").checked = resp.autoFetch !== false;
+      document.getElementById("autoDownload").checked = resp.autoDownload !== false;
+      if (resp.fetchInterval) document.getElementById("interval").value = resp.fetchInterval;
+    }
+  } catch(_) {}
+}
+
+document.getElementById("saveSettings").addEventListener("click", async () => {
+  const settings = {
+    blockSeen: document.getElementById("blockSeen").checked,
+    autoFetch: document.getElementById("autoFetch").checked,
+    autoDownload: document.getElementById("autoDownload").checked,
+    fetchInterval: parseInt(document.getElementById("interval").value) || 300
+  };
+  await browser.runtime.sendMessage({ type: "saveSettings", settings });
+});
+
+loadSettings();
 render();
