@@ -60,7 +60,12 @@ async function render(filter) {
     })
     .filter(u => u.items.length > 0)
     .filter(u => !filter || u.data.username.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => b.latest - a.latest);
+    .sort((a, b) => {
+      const sort = document.getElementById("sortBy")?.value || "newest";
+      if (sort === "oldest") return a.latest - b.latest;
+      if (sort === "username") return a.data.username.localeCompare(b.data.username);
+      return b.latest - a.latest;
+    });
 
   let total = 0;
   for (const { data, items } of users) {
@@ -181,6 +186,23 @@ function buildCard(username, item) {
     top.appendChild(ghost);
   }
 
+  // Expiry status
+  const now = Math.floor(Date.now() / 1000);
+  const isExpired = item.expiring_at && now > item.expiring_at;
+  if (isExpired) {
+    const exp = document.createElement("span");
+    exp.className = "badge badge-expired";
+    exp.textContent = "EXPIRED";
+    exp.title = "Story expired at " + formatDate(item.expiring_at);
+    top.appendChild(exp);
+  } else if (item.expiring_at) {
+    const live = document.createElement("span");
+    live.className = "badge badge-live";
+    live.textContent = "LIVE";
+    live.title = "Expires " + formatDate(item.expiring_at);
+    top.appendChild(live);
+  }
+
   if (item.deleted) {
     const del = document.createElement("span");
     del.className = "badge badge-deleted";
@@ -267,8 +289,9 @@ function buildCard(username, item) {
     const openCDN = document.createElement("a");
     openCDN.href = item.url;
     openCDN.target = "_blank";
-    openCDN.textContent = "Open CDN";
-    openCDN.title = "Open from Instagram CDN (may be expired)";
+    openCDN.textContent = isExpired ? "CDN (expired)" : "Open CDN";
+    openCDN.title = isExpired ? "CDN link likely expired - use local file instead" : "Open from Instagram CDN";
+    if (isExpired) openCDN.style.cssText = "opacity:0.4;text-decoration:line-through;";
     actions.appendChild(openCDN);
   }
 
@@ -380,6 +403,10 @@ document.getElementById("search").addEventListener("input", (e) => {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+
+document.getElementById("sortBy").addEventListener("change", () => {
+  render(document.getElementById("search").value);
+});
 
 document.getElementById("refreshBtn").addEventListener("click", async () => {
   const btn = document.getElementById("refreshBtn");
