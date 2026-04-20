@@ -97,9 +97,15 @@ async function render(filter) {
 
       if (item.url) {
         if (item.type === "video") {
-          preview.textContent = "▶";
+          const video = document.createElement("video");
+          video.src = item.url;
+          video.muted = true;
+          video.preload = "metadata";
+          video.loading = "lazy";
+          video.addEventListener("loadeddata", () => { video.currentTime = 0.5; });
+          video.onerror = () => { video.remove(); preview.textContent = "▶"; };
+          preview.appendChild(video);
         } else {
-          // Try to show from CDN (may be expired)
           const img = document.createElement("img");
           img.src = item.url;
           img.loading = "lazy";
