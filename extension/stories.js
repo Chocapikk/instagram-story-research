@@ -452,9 +452,18 @@ function buildCard(username, item) {
     const openCDN = document.createElement("a");
     openCDN.href = item.url;
     openCDN.target = "_blank";
-    openCDN.textContent = isExpired ? "CDN (expired)" : "Open CDN";
-    openCDN.title = isExpired ? "CDN link likely expired - use local file instead" : "Open from Instagram CDN";
-    if (isExpired) openCDN.style.cssText = "opacity:0.4;text-decoration:line-through;";
+    const cdnDead = cdn && !cdn.valid;
+    if (cdnDead) {
+      openCDN.textContent = "CDN (dead)";
+      openCDN.title = "CDN token expired " + cdn.elapsed + " ago";
+      openCDN.style.cssText = "opacity:0.4;text-decoration:line-through;";
+    } else if (cdn && cdn.valid) {
+      openCDN.textContent = "CDN (" + cdn.remaining + ")";
+      openCDN.title = "CDN token valid for " + cdn.remaining;
+    } else {
+      openCDN.textContent = "Open CDN";
+      openCDN.title = "Open from Instagram CDN";
+    }
     actions.appendChild(openCDN);
   }
 
