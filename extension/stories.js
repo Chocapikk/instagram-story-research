@@ -358,4 +358,16 @@ document.getElementById("search").addEventListener("input", (e) => {
 // Init
 // ---------------------------------------------------------------------------
 
+document.getElementById("refreshBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("refreshBtn");
+  btn.textContent = "Fetching...";
+  btn.disabled = true;
+  await browser.runtime.sendMessage({ type: "triggerFetch" });
+  setTimeout(async () => {
+    await render(document.getElementById("search").value);
+    btn.textContent = "\u21BB Refresh";
+    btn.disabled = false;
+  }, 3000);
+});
+
 render();
