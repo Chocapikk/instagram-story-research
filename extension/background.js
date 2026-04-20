@@ -358,25 +358,54 @@ async function buildAndFireGalleryQuery(trayIds) {
     } catch(_) {}
   }
 
-  const params = new URLSearchParams();
-  params.set("fb_api_req_friendly_name", "PolarisStoriesV3ReelPageGalleryQuery");
-  params.set("variables", JSON.stringify({ initial_reel_id: trayIds[0], reel_ids: trayIds, first: 50 }));
-  params.set("doc_id", galleryDocId());
+  let after = null;
+  let page = 0;
+  const pageSize = 12;
 
-  try {
-    const resp = await fetch("https://www.instagram.com/graphql/query", {
-      method: "POST", headers: buildHeaders(), body: params.toString(), credentials: "include"
-    });
-    const text = await resp.text();
-    bglog("GalleryQuery response status:", resp.status, "length:", text.length);
-    const data = JSON.parse(text);
-    processStoryData(data);
-    lastQueryBody = params.toString();
-    startAutoFetch();
-    bglog("Auto GalleryQuery complete");
-  } catch (e) {
-    bglog("ERROR: Auto GalleryQuery failed:", e.message || e);
+  while (true) {
+    page++;
+    const vars = { initial_reel_id: trayIds[0], reel_ids: trayIds, first: pageSize };
+    if (after) vars.after = after;
+
+    const params = new URLSearchParams();
+    params.set("fb_api_req_friendly_name", "PolarisStoriesV3ReelPageGalleryQuery");
+    params.set("variables", JSON.stringify(vars));
+    params.set("doc_id", galleryDocId());
+
+    try {
+      const resp = await fetch("https://www.instagram.com/graphql/query", {
+        method: "POST", headers: buildHeaders(), body: params.toString(), credentials: "include"
+      });
+      const text = await resp.text();
+      const data = JSON.parse(text);
+      processStoryData(data);
+
+      if (page === 1) {
+        lastQueryBody = params.toString();
+        startAutoFetch();
+      }
+
+      // Find pagination info
+      let hasNext = false, nextCursor = null;
+      (function find(obj) {
+        if (!obj || typeof obj !== "object") return;
+        if (obj.has_next_page !== undefined) { hasNext = obj.has_next_page; nextCursor = obj.end_cursor; return; }
+        if (Array.isArray(obj)) obj.forEach(find); else Object.values(obj).forEach(find);
+      })(data);
+
+      const s = cacheStats();
+      bglog("Page", page, "| users:", s.users, "| stories:", s.stories, "| hasNext:", hasNext);
+
+      if (!hasNext || !nextCursor) break;
+      after = nextCursor;
+      await new Promise(r => setTimeout(r, 1500));
+    } catch (e) {
+      bglog("ERROR: GalleryQuery page", page, "failed:", e.message || e);
+      break;
+    }
   }
+
+  bglog("GalleryQuery complete -", page, "pages fetched");
 }
 
 async function fetchMissingReels(missingIds) {
