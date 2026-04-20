@@ -345,7 +345,7 @@ async function buildAndFireGalleryQuery(trayIds) {
 
   const params = new URLSearchParams();
   params.set("fb_api_req_friendly_name", "PolarisStoriesV3ReelPageGalleryQuery");
-  params.set("variables", JSON.stringify({ initial_reel_id: trayIds[0], reel_ids: trayIds, first: 3 }));
+  params.set("variables", JSON.stringify({ initial_reel_id: trayIds[0], reel_ids: trayIds, first: 50 }));
   params.set("doc_id", galleryDocId());
 
   try {
