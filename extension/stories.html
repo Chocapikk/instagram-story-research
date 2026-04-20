@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IG Ghost Mode - Stories</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #f0f6fc;
+      --text-secondary: #c9d1d9;
+      --text-muted: #484f58;
+      --accent-blue: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-red: #f85149;
+      --accent-purple: #d2a8ff;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f6f8fa;
+        --bg-tertiary: #e1e4e8;
+        --border: #d0d7de;
+        --text-primary: #1f2328;
+        --text-secondary: #424a53;
+        --text-muted: #6e7781;
+        --accent-blue: #0969da;
+        --accent-green: #1a7f37;
+        --accent-red: #cf222e;
+        --accent-purple: #8250df;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-primary); color: var(--text-secondary);
+      min-height: 100vh;
+    }
+
+    /* ---- Top bar ---- */
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      padding: 16px 24px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .topbar-icon {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: linear-gradient(135deg, #f09433, #dc2743, #bc1888);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .topbar h1 { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .topbar .count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+    /* ---- Search ---- */
+    .search-bar {
+      padding: 12px 24px; border-bottom: 1px solid var(--border);
+    }
+    .search-bar input {
+      width: 100%; padding: 8px 12px; border-radius: 6px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      color: var(--text-secondary); font-size: 13px; font-family: inherit;
+    }
+    .search-bar input:focus { outline: none; border-color: var(--accent-blue); }
+    .search-bar input::placeholder { color: var(--text-muted); }
+
+    /* ---- Grid ---- */
+    .content { padding: 16px 24px; }
+    .empty { text-align: center; padding: 60px 0; color: var(--text-muted); font-size: 14px; }
+
+    .user-section {
+      margin-bottom: 24px; padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .user-section:last-child { border-bottom: none; }
+    .user-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px;
+    }
+    .user-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--bg-tertiary); display: flex; align-items: center;
+      justify-content: center; font-size: 16px; color: var(--text-muted);
+    }
+    .user-name { font-size: 14px; font-weight: 600; color: var(--accent-blue); }
+    .user-count { font-size: 11px; color: var(--text-muted); }
+
+    .story-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .story-card {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden; transition: border-color 0.15s;
+      cursor: pointer;
+    }
+    .story-card:hover { border-color: var(--accent-blue); }
+    .story-card.deleted { border-color: var(--accent-red); }
+
+    .story-preview {
+      width: 100%; aspect-ratio: 9/16; object-fit: cover;
+      background: var(--bg-tertiary); display: flex; align-items: center;
+      justify-content: center; color: var(--text-muted); font-size: 24px;
+    }
+    .story-preview img, .story-preview video {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+
+    .story-meta {
+      padding: 8px 10px; font-size: 11px;
+    }
+    .story-meta-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 3px;
+    }
+    .story-type {
+      font-size: 9px; font-weight: 700; padding: 2px 6px;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .story-type.video { background: #1f3a2d; color: var(--accent-green); }
+    .story-type.image { background: #1c2d4a; color: var(--accent-blue); }
+    .story-time { color: var(--text-muted); font-size: 10px; }
+    .story-deleted {
+      color: var(--accent-red); font-weight: 700; font-size: 9px;
+      background: color-mix(in srgb, var(--accent-red) 15%, transparent);
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .story-music { color: var(--accent-purple); font-size: 10px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .story-caption { color: var(--text-muted); font-size: 10px; font-style: italic; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .story-actions {
+      display: flex; gap: 6px; margin-top: 6px;
+      padding-top: 6px; border-top: 1px solid var(--border);
+    }
+    .story-actions a {
+      font-size: 10px; color: var(--accent-blue); text-decoration: none;
+      padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .story-actions a:hover { background: color-mix(in srgb, var(--accent-blue) 15%, transparent); }
+
+    /* ---- Lightbox ---- */
+    .lightbox {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.9); align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .lightbox.active { display: flex; }
+    .lightbox img, .lightbox video {
+      max-width: 90vw; max-height: 90vh; border-radius: 8px;
+    }
+    .lightbox-close {
+      position: absolute; top: 20px; right: 20px;
+      color: #fff; font-size: 24px; cursor: pointer;
+      background: rgba(255,255,255,0.1); border: none;
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-icon">&#128065;</div>
+    <h1>Story Browser</h1>
+    <span class="count" id="totalCount"></span>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="search" placeholder="Search by username...">
+  </div>
+
+  <div class="content" id="content">
+    <div class="empty">Loading stories...</div>
+  </div>
+
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="closeLightbox">&#10005;</button>
+    <div id="lightboxContent"></div>
+  </div>
+
+  <script src="stories.js"></script>
+</body>
+</html>

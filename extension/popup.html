@@ -3,18 +3,57 @@
 <head>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ---- Dark theme (default) ---- */
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #f0f6fc;
+      --text-secondary: #c9d1d9;
+      --text-muted: #484f58;
+      --accent-blue: #58a6ff;
+      --accent-green: #238636;
+      --accent-green-hover: #2ea043;
+      --accent-red: #f85149;
+      --accent-purple: #d2a8ff;
+      --toggle-bg: #30363d;
+      --toggle-dot: #8b949e;
+    }
+
+    /* ---- Light theme ---- */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f6f8fa;
+        --bg-tertiary: #e1e4e8;
+        --border: #d0d7de;
+        --text-primary: #1f2328;
+        --text-secondary: #424a53;
+        --text-muted: #6e7781;
+        --accent-blue: #0969da;
+        --accent-green: #1a7f37;
+        --accent-green-hover: #218c3a;
+        --accent-red: #cf222e;
+        --accent-purple: #8250df;
+        --toggle-bg: #d0d7de;
+        --toggle-dot: #6e7781;
+      }
+    }
+
     body {
-      width: 420px; max-height: 600px; overflow-y: auto;
+      width: 380px; overflow-y: auto;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 13px; background: #0d1117; color: #c9d1d9;
-      scrollbar-width: thin; scrollbar-color: #30363d #0d1117;
+      font-size: 13px; background: var(--bg-primary); color: var(--text-secondary);
+      scrollbar-width: thin; scrollbar-color: var(--bg-tertiary) var(--bg-primary);
     }
 
     /* ---- Header ---- */
     .header {
       padding: 14px 16px 12px;
-      background: linear-gradient(135deg, #161b22 0%, #1c2333 100%);
-      border-bottom: 1px solid #21262d;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 10px;
     }
     .header-icon {
@@ -23,177 +62,112 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 16px; flex-shrink: 0;
     }
-    .header-text h1 { font-size: 15px; font-weight: 700; color: #f0f6fc; line-height: 1.2; }
-    .header-text .subtitle { font-size: 10px; color: #484f58; margin-top: 1px; letter-spacing: 0.3px; }
+    .header-text h1 { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+    .header-text .subtitle { font-size: 10px; color: var(--text-muted); margin-top: 1px; letter-spacing: 0.3px; }
 
     /* ---- Stats ---- */
     .stats {
       display: grid; grid-template-columns: repeat(4, 1fr);
       padding: 10px 16px; gap: 8px;
-      background: #0d1117; border-bottom: 1px solid #21262d;
+      background: var(--bg-primary); border-bottom: 1px solid var(--border);
     }
     .stat {
       text-align: center; padding: 8px 4px;
-      background: #161b22; border-radius: 8px;
-      border: 1px solid #21262d;
+      background: var(--bg-secondary); border-radius: 8px;
+      border: 1px solid var(--border);
     }
     .stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; }
-    .stat-label { font-size: 9px; color: #484f58; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-    .stat-blocked .stat-value { color: #f85149; }
-    .stat-users .stat-value { color: #58a6ff; }
-    .stat-stories .stat-value { color: #3fb950; }
-    .stat-typing .stat-value { color: #d2a8ff; }
+    .stat-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .stat-blocked .stat-value { color: var(--accent-red); }
+    .stat-users .stat-value { color: var(--accent-blue); }
+    .stat-stories .stat-value { color: var(--accent-green); }
+    .stat-typing .stat-value { color: var(--accent-purple); }
 
     /* ---- Controls ---- */
     .controls {
       display: flex; gap: 6px; padding: 10px 16px;
-      border-bottom: 1px solid #21262d;
+      border-bottom: 1px solid var(--border);
     }
     button {
-      background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
-      padding: 7px 14px; border-radius: 6px; cursor: pointer;
+      background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border);
+      padding: 7px 12px; border-radius: 6px; cursor: pointer;
       font-size: 12px; font-weight: 500; font-family: inherit;
       transition: all 0.15s ease; display: flex; align-items: center; gap: 5px;
+      flex: 1; justify-content: center;
     }
-    button:hover { background: #30363d; border-color: #484f58; }
+    button:hover { opacity: 0.85; }
     button:active { transform: scale(0.97); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    button.primary { background: #238636; border-color: #2ea043; color: #fff; }
-    button.primary:hover { background: #2ea043; }
-    button.danger { color: #f85149; border-color: #f8514966; }
-    button.danger:hover { background: #f8514922; }
+    button.primary { background: var(--accent-green); border-color: var(--accent-green-hover); color: #fff; }
+    button.accent { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+    button.danger { color: var(--accent-red); border-color: color-mix(in srgb, var(--accent-red) 40%, transparent); }
 
     /* ---- Settings ---- */
     .settings {
-      padding: 12px 16px; border-bottom: 1px solid #21262d;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
     }
     .settings-title {
-      font-size: 10px; font-weight: 600; color: #484f58;
+      font-size: 10px; font-weight: 600; color: var(--text-muted);
       text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
     }
-    .toggle-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-    }
+    .toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .toggle-item {
       display: flex; align-items: center; gap: 8px;
       padding: 6px 8px; border-radius: 6px;
-      background: #161b22; border: 1px solid #21262d;
+      background: var(--bg-secondary); border: 1px solid var(--border);
       cursor: pointer; transition: all 0.15s;
     }
-    .toggle-item:hover { border-color: #30363d; background: #1c2333; }
+    .toggle-item:hover { border-color: var(--text-muted); }
     .toggle-item input[type="checkbox"] { display: none; }
     .toggle-switch {
       width: 32px; height: 18px; border-radius: 9px;
-      background: #30363d; position: relative;
+      background: var(--toggle-bg); position: relative;
       transition: background 0.2s; flex-shrink: 0;
     }
     .toggle-switch::after {
       content: ""; position: absolute; top: 2px; left: 2px;
       width: 14px; height: 14px; border-radius: 50%;
-      background: #8b949e; transition: all 0.2s;
+      background: var(--toggle-dot); transition: all 0.2s;
     }
-    .toggle-item input:checked + .toggle-switch { background: #238636; }
+    .toggle-item input:checked + .toggle-switch { background: var(--accent-green); }
     .toggle-item input:checked + .toggle-switch::after { left: 16px; background: #fff; }
     .toggle-item .toggle-icon { font-size: 14px; }
-    .toggle-item .toggle-label { font-size: 11px; color: #8b949e; line-height: 1.2; }
-    .toggle-item input:checked ~ .toggle-label { color: #c9d1d9; }
+    .toggle-item .toggle-label { font-size: 11px; color: var(--text-muted); line-height: 1.2; }
+    .toggle-item input:checked ~ .toggle-label { color: var(--text-secondary); }
 
     .interval-row {
       display: flex; align-items: center; gap: 8px;
       margin-top: 10px; padding-top: 10px;
-      border-top: 1px solid #21262d;
+      border-top: 1px solid var(--border);
     }
-    .interval-row span { font-size: 11px; color: #8b949e; }
+    .interval-row span { font-size: 11px; color: var(--text-muted); }
     .interval-row input[type="number"] {
-      width: 60px; background: #0d1117; color: #c9d1d9;
-      border: 1px solid #30363d; border-radius: 6px;
-      padding: 5px 8px; font-size: 12px; font-family: inherit;
-      text-align: center;
+      width: 60px; background: var(--bg-primary); color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 8px; font-size: 12px; font-family: inherit; text-align: center;
     }
-    .interval-row input:focus { outline: none; border-color: #58a6ff; }
-
-    /* ---- Content / story list ---- */
-    #content { padding: 12px 16px; min-height: 60px; }
-    .empty {
-      text-align: center; padding: 20px 0; color: #484f58;
-    }
-    .empty-icon { font-size: 28px; margin-bottom: 6px; }
-    .empty-text { font-size: 12px; font-style: italic; }
-
-    .user {
-      margin-bottom: 12px; padding-bottom: 12px;
-      border-bottom: 1px solid #21262d;
-    }
-    .user:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .user-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .username {
-      font-weight: 600; color: #58a6ff; font-size: 13px;
-      text-decoration: none;
-    }
-    .username:hover { text-decoration: underline; }
-    .story-count {
-      font-size: 10px; color: #8b949e; background: #21262d;
-      padding: 2px 8px; border-radius: 10px; font-weight: 500;
-    }
-
-    .item {
-      display: flex; align-items: center; gap: 6px;
-      margin: 4px 0; font-size: 11px; color: #8b949e;
-      padding: 5px 8px; border-radius: 6px;
-      background: #161b22; border: 1px solid transparent;
-      transition: border-color 0.15s;
-    }
-    .item:hover { border-color: #21262d; }
-    .item-type {
-      font-size: 9px; font-weight: 700; padding: 2px 6px;
-      border-radius: 4px; text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .item-type.video { background: #1f3a2d; color: #3fb950; }
-    .item-type.image { background: #1c2d4a; color: #58a6ff; }
-    .item-time { color: #8b949e; font-size: 11px; }
-    .deleted {
-      color: #f85149; font-weight: 700; font-size: 9px;
-      background: #f8514922; padding: 1px 5px; border-radius: 3px;
-    }
-    .music { color: #d2a8ff; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
-    .caption-text { color: #8b949e; font-size: 10px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
-    .media-link {
-      color: #58a6ff; text-decoration: none; font-size: 10px; font-weight: 500;
-      padding: 2px 6px; border: 1px solid #30363d; border-radius: 4px;
-      transition: all 0.15s;
-    }
-    .media-link:hover { background: #58a6ff22; border-color: #58a6ff66; }
-    .cached { color: #484f58; font-size: 9px; margin-left: auto; white-space: nowrap; }
+    .interval-row input:focus { outline: none; border-color: var(--accent-blue); }
 
     /* ---- Log ---- */
-    .log-section {
-      border-top: 1px solid #21262d; background: #010409;
-    }
+    .log-section { border-top: 1px solid var(--border); }
     .log-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 16px; cursor: pointer; user-select: none;
     }
     .log-header span {
-      font-size: 10px; color: #484f58; text-transform: uppercase;
+      font-size: 10px; color: var(--text-muted); text-transform: uppercase;
       letter-spacing: 0.8px; font-weight: 600;
-      display: flex; align-items: center; gap: 4px;
     }
-    .log-header button { font-size: 10px; padding: 3px 8px; }
+    .log-header button { font-size: 10px; padding: 3px 8px; flex: none; }
     #log {
       max-height: 120px; overflow-y: auto; padding: 0 16px 10px;
-      font-size: 10px; color: #484f58; font-family: "SF Mono", "Fira Code", monospace;
-      scrollbar-width: thin; scrollbar-color: #21262d #010409;
+      font-size: 10px; color: var(--text-muted); font-family: "SF Mono", "Fira Code", monospace;
     }
-    #log div { padding: 2px 0; border-bottom: 1px solid #0d1117; line-height: 1.4; }
-    #log .log-error { color: #f85149; }
-    #log .log-bg { color: #8b949e; }
-    #log .log-page { color: #d2a8ff; }
+    #log div { padding: 2px 0; border-bottom: 1px solid var(--bg-secondary); line-height: 1.4; }
+    #log .log-error { color: var(--accent-red); }
+    #log .log-bg { color: var(--text-muted); }
+    #log .log-page { color: var(--accent-purple); }
 
-    /* ---- Animations ---- */
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .fetching { animation: pulse 1s ease-in-out infinite; }
   </style>
@@ -228,8 +202,9 @@
 
   <div class="controls">
     <button id="refresh" class="primary">&#8635; Refresh</button>
+    <button id="viewStories" class="accent">&#9776; Stories</button>
     <button id="export">&#8681; Export</button>
-    <button id="clear" class="danger">&#10005; Clear</button>
+    <button id="clear" class="danger">&#10005;</button>
   </div>
 
   <div class="settings">
@@ -267,21 +242,14 @@
       </label>
     </div>
     <div class="interval-row">
-      <span>&#8634; Auto-fetch every</span>
+      <span>&#8634; Fetch every</span>
       <input type="number" id="interval" value="300" min="60" max="3600">
       <span>sec</span>
-      <label class="toggle-item" style="margin-left:auto;padding:4px 8px;">
+      <label class="toggle-item" style="margin-left:auto;padding:4px 8px;flex:none;">
         <input type="checkbox" id="autoFetch" checked>
         <div class="toggle-switch"></div>
       </label>
-      <button id="saveSettings" style="margin-left:4px;">Save</button>
-    </div>
-  </div>
-
-  <div id="content">
-    <div class="empty">
-      <div class="empty-icon">&#128270;</div>
-      <div class="empty-text">No stories cached yet. Browse Instagram to start.</div>
+      <button id="saveSettings" style="flex:none;">Save</button>
     </div>
   </div>
 

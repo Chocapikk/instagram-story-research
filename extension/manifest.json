@@ -34,7 +34,7 @@
   "background": {
     "scripts": ["background.js"]
   },
-  "web_accessible_resources": ["inject.js"],
+  "web_accessible_resources": ["inject.js", "stories.html", "stories.js"],
   "browser_action": {
     "default_popup": "popup.html"
   }
