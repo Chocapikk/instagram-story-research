@@ -6,6 +6,37 @@ async function getCache() {
   } catch(_) { return null; }
 }
 
+async function getSeenHistory() {
+  try {
+    const resp = await browser.runtime.sendMessage({ type: "getSeenHistory" });
+    return resp?.seenHistory || {};
+  } catch(_) { return {}; }
+}
+
+async function scanLocalFiles() {
+  try {
+    const results = await browser.downloads.search({ query: ["ig_stories/"], limit: 5000, orderBy: ["-startTime"] });
+    const files = {};
+    for (const dl of results) {
+      if (!dl.filename || dl.state !== "complete") continue;
+      // Parse: .../ig_stories/<username>/<date>_<mediaId>.<ext>
+      const match = dl.filename.match(/ig_stories\/([^/]+)\/(\d{4}-\d{2}-\d{2})_(\d+)\.(jpg|mp4)$/);
+      if (!match) continue;
+      const [, username, date, mediaId, ext] = match;
+      if (!files[username]) files[username] = {};
+      files[username][mediaId] = {
+        id: mediaId,
+        type: ext === "mp4" ? "video" : "image",
+        localDate: date,
+        downloadId: dl.id,
+        fileUrl: "file://" + dl.filename,
+        fileSize: dl.fileSize || 0
+      };
+    }
+    return files;
+  } catch(_) { return {}; }
+}
+
 function timeAgo(ts) {
   const diff = Math.floor((Date.now() / 1000) - ts);
   if (diff < 60) return diff + "s ago";
@@ -40,13 +71,50 @@ async function findDownload(path) {
 // ---------------------------------------------------------------------------
 
 async function render(filter) {
-  const cache = await getCache();
+  const cache = await getCache() || {};
+  const seenHist = await getSeenHistory();
+  const localFiles = await scanLocalFiles();
   const el = document.getElementById("content");
   el.textContent = "";
 
-  if (!cache || Object.keys(cache).length === 0) {
+  // Merge local files into cache: add stories that exist on disk but not in cache
+  const merged = JSON.parse(JSON.stringify(cache));
+  for (const [username, files] of Object.entries(localFiles)) {
+    // Find user in cache by username
+    let userId = null;
+    for (const [uid, data] of Object.entries(merged)) {
+      if (data.username === username) { userId = uid; break; }
+    }
+    if (!userId) {
+      userId = "local_" + username;
+      merged[userId] = { username, items: {} };
+    }
+    for (const [mediaId, file] of Object.entries(files)) {
+      if (!merged[userId].items[mediaId]) {
+        const hist = seenHist[mediaId] || {};
+        merged[userId].items[mediaId] = {
+          id: mediaId,
+          type: file.type,
+          timestamp: null,
+          expiring_at: null,
+          cached_at: null,
+          url: null,
+          localOnly: true,
+          downloadId: file.downloadId,
+          seenSent: hist.seenSent || false,
+          seenBlocked: hist.seenBlocked || false
+        };
+      } else {
+        // Attach download ID to existing cached item
+        merged[userId].items[mediaId].downloadId = file.downloadId;
+      }
+    }
+  }
+
+  const hasData = Object.values(merged).some(u => Object.keys(u.items).length > 0);
+  if (!hasData) {
     el.appendChild(Object.assign(document.createElement("div"), {
-      className: "empty", textContent: "No stories cached. Open Instagram and click Refresh in the extension popup."
+      className: "empty", textContent: "No stories cached or downloaded. Open Instagram and click Refresh in the extension popup."
     }));
     document.getElementById("totalCount").textContent = "";
     return;
@@ -162,6 +230,15 @@ function buildCard(username, item) {
   typeBadge.className = "badge " + (item.type === "video" ? "badge-video" : "badge-image");
   typeBadge.textContent = item.type === "video" ? "VID" : "IMG";
   top.appendChild(typeBadge);
+
+  // Local only badge (not in live cache, only on disk)
+  if (item.localOnly) {
+    const local = document.createElement("span");
+    local.className = "badge badge-local";
+    local.textContent = "\uD83D\uDCBE LOCAL";
+    local.title = "This story is only available from local disk (expired from cache)";
+    top.appendChild(local);
+  }
 
   // Close friends badge
   if (item.audience === "besties") {
@@ -299,6 +376,10 @@ function buildCard(username, item) {
   openLocal.textContent = "Open local";
   openLocal.title = "Open downloaded file";
   openLocal.addEventListener("click", async () => {
+    if (item.downloadId) {
+      browser.downloads.open(item.downloadId).catch(() => browser.downloads.show(item.downloadId));
+      return;
+    }
     const localPath = getLocalPath(username, item);
     const dl = await findDownload(localPath);
     if (dl) {

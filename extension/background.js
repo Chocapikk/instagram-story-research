@@ -626,6 +626,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true });
   }
   if (msg.type === "clearCache") { storyCache = {}; sendResponse({ ok: true }); }
+  if (msg.type === "getSeenHistory") sendResponse({ seenHistory });
   if (msg.type === "getLogs") sendResponse({ logs: [...bgLog] });
   if (msg.type === "getSettings") sendResponse(settings);
   if (msg.type === "saveSettings") {
