@@ -169,7 +169,26 @@ async function render(filter) {
     count.textContent = items.length + (items.length === 1 ? " story" : " stories");
     info.appendChild(count);
     header.appendChild(info);
+
+    const dashBtn = document.createElement("button");
+    dashBtn.className = "dash-toggle";
+    dashBtn.textContent = "\uD83D\uDCCA Analytics";
+    dashBtn.style.marginLeft = "auto";
+    header.appendChild(dashBtn);
+
     section.appendChild(header);
+
+    // Dashboard
+    const dashId = "dash-" + data.username;
+    const dashboard = document.createElement("div");
+    dashboard.className = "user-dashboard";
+    dashboard.id = dashId;
+    section.appendChild(dashboard);
+
+    dashBtn.addEventListener("click", () => {
+      const isOpen = dashboard.classList.toggle("open");
+      if (isOpen) buildDashboard(dashboard, data.username, items);
+    });
 
     // Story grid
     const grid = document.createElement("div");
@@ -532,3 +551,206 @@ document.getElementById("refreshBtn").addEventListener("click", async () => {
 });
 
 render();
+
+// ---------------------------------------------------------------------------
+// User analytics dashboard
+// ---------------------------------------------------------------------------
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: "#c9d1d9", font: { size: 10 } } } },
+  scales: {
+    x: { ticks: { color: "#8b949e", font: { size: 9 } }, grid: { color: "#21262d" } },
+    y: { ticks: { color: "#8b949e", font: { size: 9 } }, grid: { color: "#21262d" } }
+  }
+};
+
+function buildDashboard(container, username, items) {
+  container.textContent = "";
+
+  const now = Math.floor(Date.now() / 1000);
+  const totalStories = items.length;
+  const videos = items.filter(i => i.type === "video").length;
+  const images = totalStories - videos;
+  const deleted = items.filter(i => i.deleted);
+  const besties = items.filter(i => i.audience === "besties").length;
+  const ghosted = items.filter(i => i.seenBlocked).length;
+  const seen = items.filter(i => i.seenSent).length;
+
+  // Average response time (cached_at - timestamp)
+  const responseTimes = items
+    .filter(i => i.cached_at && i.timestamp)
+    .map(i => (i.cached_at - i.timestamp * 1000) / 1000);
+  const avgResponse = responseTimes.length
+    ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+    : 0;
+
+  // Average deletion speed
+  const deletionSpeeds = deleted
+    .filter(i => i.deleted_at && i.timestamp)
+    .map(i => (i.deleted_at - i.timestamp * 1000) / 1000);
+  const avgDeletion = deletionSpeeds.length
+    ? deletionSpeeds.reduce((a, b) => a + b, 0) / deletionSpeeds.length
+    : 0;
+
+  // Title
+  const title = document.createElement("div");
+  title.className = "dash-title";
+  title.textContent = "\uD83D\uDCCA Analytics for @" + username;
+  container.appendChild(title);
+
+  // Stat cards
+  const grid = document.createElement("div");
+  grid.className = "dash-grid";
+
+  const stats = [
+    [totalStories, "Total stories"],
+    [Math.round((deleted.length / totalStories) * 100) + "%", "Deletion rate"],
+    [durationStr(avgResponse * 1000), "Avg time to view"],
+    [avgDeletion > 0 ? durationStr(avgDeletion * 1000) : "-", "Avg deletion speed"],
+    [Math.round((besties / totalStories) * 100) + "%", "Close friends"],
+    [Math.round((videos / totalStories) * 100) + "%", "Video ratio"]
+  ];
+
+  for (const [value, label] of stats) {
+    const card = document.createElement("div");
+    card.className = "dash-stat";
+    const v = document.createElement("div");
+    v.className = "dash-stat-value";
+    v.textContent = value;
+    const l = document.createElement("div");
+    l.className = "dash-stat-label";
+    l.textContent = label;
+    card.appendChild(v);
+    card.appendChild(l);
+    grid.appendChild(card);
+  }
+  container.appendChild(grid);
+
+  // Charts
+  const charts = document.createElement("div");
+  charts.className = "dash-charts";
+
+  // 1. Posting hours histogram
+  const hours = new Array(24).fill(0);
+  items.forEach(i => { if (i.timestamp) hours[new Date(i.timestamp * 1000).getHours()]++; });
+  const hoursChart = makeChartContainer("Posting hours");
+  charts.appendChild(hoursChart.wrapper);
+  new Chart(hoursChart.canvas, {
+    type: "bar",
+    data: {
+      labels: Array.from({ length: 24 }, (_, i) => i + "h"),
+      datasets: [{ data: hours, backgroundColor: "#58a6ff", borderRadius: 3 }]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: false } } }
+  });
+
+  // 2. Media type + status donut
+  const typeChart = makeChartContainer("Content breakdown");
+  charts.appendChild(typeChart.wrapper);
+  new Chart(typeChart.canvas, {
+    type: "doughnut",
+    data: {
+      labels: ["Images", "Videos", "Deleted", "Close Friends"],
+      datasets: [{
+        data: [images, videos, deleted.length, besties],
+        backgroundColor: ["#58a6ff", "#3fb950", "#f85149", "#d29922"]
+      }]
+    },
+    options: { ...chartDefaults, scales: {} }
+  });
+
+  // 3. Seen status donut
+  const seenChart = makeChartContainer("Seen status");
+  charts.appendChild(seenChart.wrapper);
+  const autoFetched = totalStories - seen - ghosted;
+  new Chart(seenChart.canvas, {
+    type: "doughnut",
+    data: {
+      labels: ["Seen (receipt sent)", "Ghost (blocked)", "Auto-fetched"],
+      datasets: [{
+        data: [seen, ghosted, autoFetched],
+        backgroundColor: ["#d29922", "#8957e5", "#30363d"]
+      }]
+    },
+    options: { ...chartDefaults, scales: {} }
+  });
+
+  // 4. Activity timeline (stories per day)
+  const days = {};
+  items.forEach(i => {
+    if (!i.timestamp) return;
+    const day = new Date(i.timestamp * 1000).toISOString().split("T")[0];
+    days[day] = (days[day] || 0) + 1;
+  });
+  const sortedDays = Object.keys(days).sort();
+  if (sortedDays.length > 1) {
+    const timeChart = makeChartContainer("Activity timeline");
+    charts.appendChild(timeChart.wrapper);
+    new Chart(timeChart.canvas, {
+      type: "line",
+      data: {
+        labels: sortedDays.map(d => d.slice(5)),
+        datasets: [{
+          data: sortedDays.map(d => days[d]),
+          borderColor: "#58a6ff",
+          backgroundColor: "#58a6ff22",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3
+        }]
+      },
+      options: { ...chartDefaults, plugins: { legend: { display: false } } }
+    });
+  }
+
+  container.appendChild(charts);
+
+  // 5. Top music
+  const musicCounts = {};
+  items.forEach(i => {
+    if (!i.music_title) return;
+    const key = i.music_title + (i.music_artist ? " - " + i.music_artist : "");
+    musicCounts[key] = (musicCounts[key] || 0) + 1;
+  });
+  const topMusic = Object.entries(musicCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (topMusic.length > 0) {
+    const musicDiv = document.createElement("div");
+    musicDiv.className = "dash-chart";
+    musicDiv.style.marginTop = "12px";
+    const musicTitle = document.createElement("div");
+    musicTitle.className = "dash-chart-title";
+    musicTitle.textContent = "\u266A Top music";
+    musicDiv.appendChild(musicTitle);
+    const list = document.createElement("div");
+    list.className = "dash-music-list";
+    for (const [song, count] of topMusic) {
+      const item = document.createElement("div");
+      item.className = "dash-music-item";
+      const name = document.createElement("span");
+      name.textContent = song;
+      const c = document.createElement("span");
+      c.className = "dash-music-count";
+      c.textContent = count + "x";
+      item.appendChild(name);
+      item.appendChild(c);
+      list.appendChild(item);
+    }
+    musicDiv.appendChild(list);
+    container.appendChild(musicDiv);
+  }
+}
+
+function makeChartContainer(title) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "dash-chart";
+  const t = document.createElement("div");
+  t.className = "dash-chart-title";
+  t.textContent = title;
+  wrapper.appendChild(t);
+  const canvas = document.createElement("canvas");
+  canvas.style.maxHeight = "200px";
+  wrapper.appendChild(canvas);
+  return { wrapper, canvas };
+}

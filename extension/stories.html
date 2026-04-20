@@ -184,6 +184,48 @@
       border-color: var(--accent-blue);
     }
 
+    /* ---- User dashboard ---- */
+    .user-dashboard {
+      display: none; margin-top: 12px; padding: 16px;
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .user-dashboard.open { display: block; }
+    .dash-title {
+      font-size: 13px; font-weight: 700; color: var(--text-primary);
+      margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+    }
+    .dash-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px; margin-bottom: 16px;
+    }
+    .dash-stat {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px; text-align: center;
+    }
+    .dash-stat-value { font-size: 22px; font-weight: 800; color: var(--text-primary); }
+    .dash-stat-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .dash-charts {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .dash-chart {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px;
+    }
+    .dash-chart-title { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .dash-chart canvas { max-height: 200px; }
+    .dash-toggle {
+      font-size: 11px; color: var(--accent-blue); cursor: pointer;
+      margin-left: auto; padding: 4px 10px; border: 1px solid var(--border);
+      border-radius: 5px; background: transparent; font-family: inherit;
+    }
+    .dash-toggle:hover { background: var(--bg-tertiary); }
+    .dash-music-list { font-size: 11px; color: var(--text-secondary); }
+    .dash-music-item { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--border); }
+    .dash-music-item:last-child { border-bottom: none; }
+    .dash-music-count { color: var(--accent-purple); font-weight: 700; }
+
     /* ---- Lightbox ---- */
     .lightbox {
       display: none; position: fixed; inset: 0; z-index: 100;
@@ -239,6 +281,7 @@
     <div class="lightbox-info" id="lightboxInfo"></div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="stories.js"></script>
 </body>
 </html>

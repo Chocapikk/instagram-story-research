@@ -34,7 +34,8 @@ module.exports = [
         Object: "readonly",
         Date: "readonly",
         Math: "readonly",
-        HTMLElement: "readonly"
+        HTMLElement: "readonly",
+        Chart: "readonly"
       }
     },
     rules: {
