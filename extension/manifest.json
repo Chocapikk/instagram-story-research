@@ -1,14 +1,14 @@
 {
   "manifest_version": 2,
   "name": "IG Story Research",
-  "version": "0.7",
+  "version": "0.8",
   "description": "Privacy research - blocks seen receipts, caches stories locally",
   "browser_specific_settings": {
     "gecko": {
       "id": "ig-story-research@chocapikk",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
-        "required": []
+        "required": ["none"]
       }
     }
   },
