@@ -538,6 +538,24 @@ document.getElementById("sortBy").addEventListener("change", () => {
   render(document.getElementById("search").value);
 });
 
+// Tab switching
+document.getElementById("tabStories").addEventListener("click", () => {
+  document.getElementById("tabStories").classList.add("active");
+  document.getElementById("tabGlobal").classList.remove("active");
+  document.getElementById("content").style.display = "";
+  document.querySelector(".search-bar").style.display = "";
+  document.getElementById("globalDashboard").classList.remove("active");
+});
+
+document.getElementById("tabGlobal").addEventListener("click", async () => {
+  document.getElementById("tabGlobal").classList.add("active");
+  document.getElementById("tabStories").classList.remove("active");
+  document.getElementById("content").style.display = "none";
+  document.querySelector(".search-bar").style.display = "none";
+  document.getElementById("globalDashboard").classList.add("active");
+  await buildGlobalDashboard();
+});
+
 document.getElementById("refreshBtn").addEventListener("click", async () => {
   const btn = document.getElementById("refreshBtn");
   btn.textContent = "Fetching...";
@@ -739,6 +757,287 @@ function buildDashboard(container, username, items) {
     }
     musicDiv.appendChild(list);
     container.appendChild(musicDiv);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Global analytics dashboard
+// ---------------------------------------------------------------------------
+
+async function buildGlobalDashboard() {
+  const cache = await getCache() || {};
+  const container = document.getElementById("globalDashboard");
+  container.textContent = "";
+
+  const allItems = [];
+  const userStats = [];
+
+  for (const [, data] of Object.entries(cache)) {
+    const items = Object.values(data.items);
+    if (items.length === 0) continue;
+    allItems.push(...items.map(i => ({ ...i, username: data.username })));
+
+    const deleted = items.filter(i => i.deleted).length;
+    const besties = items.filter(i => i.audience === "besties").length;
+    const videos = items.filter(i => i.type === "video").length;
+    userStats.push({
+      username: data.username,
+      total: items.length,
+      deleted,
+      besties,
+      videos,
+      deletionRate: Math.round((deleted / items.length) * 100)
+    });
+  }
+
+  if (allItems.length === 0) {
+    container.textContent = "No data yet.";
+    return;
+  }
+
+  const totalStories = allItems.length;
+  const totalUsers = userStats.length;
+  const totalDeleted = allItems.filter(i => i.deleted).length;
+  const totalVideos = allItems.filter(i => i.type === "video").length;
+  const totalBesties = allItems.filter(i => i.audience === "besties").length;
+  const totalGhosted = allItems.filter(i => i.seenBlocked).length;
+  const totalSeen = allItems.filter(i => i.seenSent).length;
+
+  // Title
+  const title = document.createElement("div");
+  title.className = "dash-title";
+  title.style.fontSize = "18px";
+  title.textContent = "\uD83D\uDCCA Global Analytics";
+  container.appendChild(title);
+
+  // Global stat cards
+  const grid = document.createElement("div");
+  grid.className = "dash-grid";
+  const gStats = [
+    [totalStories, "Total stories"],
+    [totalUsers, "Users tracked"],
+    [totalDeleted, "Purged"],
+    [totalVideos, "Videos"],
+    [totalBesties, "Close friends"],
+    [totalGhosted, "Ghost views"],
+    [totalSeen, "Seen (receipt sent)"],
+    [Math.round((totalDeleted / totalStories) * 100) + "%", "Global deletion rate"]
+  ];
+  for (const [value, label] of gStats) {
+    const card = document.createElement("div");
+    card.className = "dash-stat";
+    const v = document.createElement("div");
+    v.className = "dash-stat-value";
+    v.textContent = value;
+    const l = document.createElement("div");
+    l.className = "dash-stat-label";
+    l.textContent = label;
+    card.appendChild(v);
+    card.appendChild(l);
+    grid.appendChild(card);
+  }
+  container.appendChild(grid);
+
+  // Charts section
+  const charts = document.createElement("div");
+  charts.className = "dash-charts";
+
+  // 1. Global posting hours
+  const hours = new Array(24).fill(0);
+  allItems.forEach(i => { if (i.timestamp) hours[new Date(i.timestamp * 1000).getHours()]++; });
+  const hoursC = makeChartContainer("Global posting hours");
+  charts.appendChild(hoursC.wrapper);
+  new Chart(hoursC.canvas, {
+    type: "bar",
+    data: {
+      labels: Array.from({ length: 24 }, (_, i) => i + "h"),
+      datasets: [{ data: hours, backgroundColor: "#58a6ff", borderRadius: 3 }]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: false } } }
+  });
+
+  // 2. Global activity timeline
+  const days = {};
+  allItems.forEach(i => {
+    if (!i.timestamp) return;
+    const day = new Date(i.timestamp * 1000).toISOString().split("T")[0];
+    days[day] = (days[day] || 0) + 1;
+  });
+  const sortedDays = Object.keys(days).sort();
+  if (sortedDays.length > 1) {
+    const timeC = makeChartContainer("Stories per day (all users)");
+    charts.appendChild(timeC.wrapper);
+    new Chart(timeC.canvas, {
+      type: "line",
+      data: {
+        labels: sortedDays.map(d => d.slice(5)),
+        datasets: [{
+          data: sortedDays.map(d => days[d]),
+          borderColor: "#58a6ff",
+          backgroundColor: "#58a6ff22",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3
+        }]
+      },
+      options: { ...chartDefaults, plugins: { legend: { display: false } } }
+    });
+  }
+
+  // 3. Seen status global
+  const seenC = makeChartContainer("Seen status (global)");
+  charts.appendChild(seenC.wrapper);
+  new Chart(seenC.canvas, {
+    type: "doughnut",
+    data: {
+      labels: ["Seen", "Ghost", "Auto-fetched"],
+      datasets: [{
+        data: [totalSeen, totalGhosted, totalStories - totalSeen - totalGhosted],
+        backgroundColor: ["#d29922", "#8957e5", "#30363d"]
+      }]
+    },
+    options: { ...chartDefaults, scales: {} }
+  });
+
+  // 4. Content type global
+  const typeC = makeChartContainer("Content type (global)");
+  charts.appendChild(typeC.wrapper);
+  new Chart(typeC.canvas, {
+    type: "doughnut",
+    data: {
+      labels: ["Images", "Videos"],
+      datasets: [{
+        data: [totalStories - totalVideos, totalVideos],
+        backgroundColor: ["#58a6ff", "#3fb950"]
+      }]
+    },
+    options: { ...chartDefaults, scales: {} }
+  });
+
+  container.appendChild(charts);
+
+  // Leaderboard: most active posters
+  const section1 = document.createElement("div");
+  section1.className = "global-section";
+  const s1Title = document.createElement("div");
+  s1Title.className = "global-section-title";
+  s1Title.textContent = "\uD83C\uDFC6 Most active posters";
+  section1.appendChild(s1Title);
+
+  const sorted = [...userStats].sort((a, b) => b.total - a.total);
+  const maxTotal = sorted[0]?.total || 1;
+  const table = document.createElement("table");
+  table.className = "leaderboard";
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  for (const h of ["#", "User", "Stories", "Deleted", "Videos", "Del %", ""]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  sorted.forEach((u, i) => {
+    const tr = document.createElement("tr");
+    const cells = [
+      i + 1,
+      "@" + u.username,
+      u.total,
+      u.deleted,
+      u.videos,
+      u.deletionRate + "%"
+    ];
+    cells.forEach((c, j) => {
+      const td = document.createElement("td");
+      if (j === 0) td.className = "rank";
+      td.textContent = c;
+      tr.appendChild(td);
+    });
+    // Bar
+    const barTd = document.createElement("td");
+    barTd.style.width = "100px";
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.width = Math.round((u.total / maxTotal) * 100) + "%";
+    barTd.appendChild(bar);
+    tr.appendChild(barTd);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  section1.appendChild(table);
+  container.appendChild(section1);
+
+  // Top music global
+  const musicCounts = {};
+  allItems.forEach(i => {
+    if (!i.music_title) return;
+    const key = i.music_title + (i.music_artist ? " - " + i.music_artist : "");
+    musicCounts[key] = (musicCounts[key] || 0) + 1;
+  });
+  const topMusic = Object.entries(musicCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (topMusic.length > 0) {
+    const section2 = document.createElement("div");
+    section2.className = "global-section";
+    const s2Title = document.createElement("div");
+    s2Title.className = "global-section-title";
+    s2Title.textContent = "\u266A Top music (all users)";
+    section2.appendChild(s2Title);
+    const list = document.createElement("div");
+    list.className = "dash-music-list";
+    for (const [song, count] of topMusic) {
+      const item = document.createElement("div");
+      item.className = "dash-music-item";
+      const name = document.createElement("span");
+      name.textContent = song;
+      const c = document.createElement("span");
+      c.className = "dash-music-count";
+      c.textContent = count + "x";
+      item.appendChild(name);
+      item.appendChild(c);
+      list.appendChild(item);
+    }
+    section2.appendChild(list);
+    container.appendChild(section2);
+  }
+
+  // Highest deletion rate
+  const deleters = [...userStats].filter(u => u.total >= 3).sort((a, b) => b.deletionRate - a.deletionRate);
+  if (deleters.length > 0) {
+    const section3 = document.createElement("div");
+    section3.className = "global-section";
+    const s3Title = document.createElement("div");
+    s3Title.className = "global-section-title";
+    s3Title.textContent = "\uD83D\uDDD1 Highest deletion rate (min 3 stories)";
+    section3.appendChild(s3Title);
+    const table3 = document.createElement("table");
+    table3.className = "leaderboard";
+    const thead3 = document.createElement("thead");
+    const hr3 = document.createElement("tr");
+    for (const h of ["#", "User", "Total", "Deleted", "Rate"]) {
+      const th = document.createElement("th");
+      th.textContent = h;
+      hr3.appendChild(th);
+    }
+    thead3.appendChild(hr3);
+    table3.appendChild(thead3);
+    const tbody3 = document.createElement("tbody");
+    deleters.slice(0, 10).forEach((u, i) => {
+      const tr = document.createElement("tr");
+      const cells = [i + 1, "@" + u.username, u.total, u.deleted, u.deletionRate + "%"];
+      cells.forEach((c, j) => {
+        const td = document.createElement("td");
+        if (j === 0) td.className = "rank";
+        td.textContent = c;
+        tr.appendChild(td);
+      });
+      tbody3.appendChild(tr);
+    });
+    table3.appendChild(tbody3);
+    section3.appendChild(table3);
+    container.appendChild(section3);
   }
 }
 
