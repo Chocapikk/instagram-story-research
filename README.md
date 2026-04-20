@@ -2,7 +2,7 @@
 
 **The PoC that became a product. You're welcome, Meta.**
 
-A Firefox extension that blocks every client-side privacy signal Instagram uses: story seen receipts, DM read receipts, typing indicators, and online presence. Plus automatic story caching, media downloads, deletion detection, and metadata export.
+A Firefox extension that blocks every client-side privacy signal Instagram uses: story seen receipts, DM read receipts, typing indicators, and online presence. Plus automatic story caching, media downloads, deletion detection, seen tracking, and full metadata export.
 
 Full writeup: [Instagram's "Seen" Is a Lie](https://chocapikk.com/posts/2026/instagram-seen-is-a-lie/)
 
@@ -12,22 +12,46 @@ Full writeup: [Instagram's "Seen" Is a Lie](https://chocapikk.com/posts/2026/ins
 |--------|-----------|---------------|--------|
 | Story seen | GraphQL POST | `PolarisStoriesV3SeenMutation` | Story seen |
 | DM read | GraphQL POST | `useIGDMarkThreadAsReadValidationMutation` | DM read |
-| Typing indicator | MQTT WebSocket | `typing_activity` on `gateway.instagram.com` | Typing |
-| Online presence | MQTT WebSocket | `co_presence` heartbeat on `gateway.instagram.com` | Online |
+| Typing indicator | MQTT WebSocket | `typing_activity` / `indicate_activity` | Typing |
+| Online presence | MQTT WebSocket | `co_presence` heartbeat | Online |
 
-Every single "privacy signal" on Instagram is client-side trust with zero server-side enforcement. Block the call and you're invisible. One toggle per signal.
+Two known MQTT gateways: `gateway.instagram.com` and `edge-chat.instagram.com`. Both intercepted.
 
 ## What it does beyond blocking
 
-- **Automatic story fetching** - extracts tray user IDs from SSR HTML, captures GraphQL `doc_id`s from JS bundles, fires its own GalleryQuery. Stories cached without clicking.
-- **Media download** - every story saved to `ig_stories/<username>/<date>_<id>.jpg|mp4`. If someone deletes a story 5 minutes later, the file is already on disk.
-- **Deletion detection** - if a story disappears before 24h expiry, flagged as deleted. File persists.
-- **Asymmetric visibility** - blocks your receipts but your own story metadata still includes the full viewer list. You see who views you while being invisible viewing others.
-- **CSV export** - timestamped CSV with username, media ID, music, caption, audience, viewer count, deletion status.
-- **Auto-refresh** - replays GalleryQuery every N seconds with pagination.
-- **Persistent state** - story cache and reel IDs survive extension reload via `storage.local`.
-- **Story browser** - dedicated tab with grid layout, search by username, expandable metadata panels (media ID, timestamps, dimensions, music, audience, viewer count, local file path), image/video lightbox with info overlay, and direct links to open local files or CDN URLs.
-- **System theme** - follows OS dark/light preference automatically.
+**Story intelligence**
+- **Full tray fetch** - queries `/api/v1/feed/reels_tray/` to get ALL users with active stories, not just what's visible in the HTML
+- **Auto-pagination** - fetches stories in pages until `has_next_page: false`, no hardcoded limits
+- **Media download** - every story saved to `ig_stories/<username>/<date>_<id>.jpg|mp4`
+- **Seen tracking** - detects which stories you've already viewed (via tray seen timestamps) and which were viewed invisibly (seen blocked by extension)
+- **Deletion vs expiry** - distinguishes between stories manually deleted by the poster (PURGED) and stories that expired naturally after 24h (EXPIRED). Downloaded files persist in both cases
+- **Close friends detection** - identifies and badges stories posted to the poster's close friends list
+- **Persistent seen history** - seen/ghost status stored independently from cache, survives cache clear and extension reload
+- **Local file scanning** - scans downloaded files via `browser.downloads.search()` to show stories that exist on disk even after cache is cleared
+
+**Asymmetric visibility**
+- Blocks your receipts but your own story metadata still includes the full viewer list
+- You see who views your stories while being invisible when viewing theirs
+
+**Data export**
+- **CSV** with columns: username, media_id, code, type, timestamp, posted_at, expires_at, cached_at, music_title, music_artist, caption, audience, viewer_count, file_path, deleted, deleted_at, seen_sent, seen_blocked
+- **JSON export** of full cache with all metadata
+
+**Story browser**
+- Dedicated full-tab browser opened from the popup
+- Grid layout with video thumbnails (first frame preview)
+- Search by username, sort by date or alphabetical
+- Expandable metadata panels per story (media ID, timestamps, dimensions, music, audience, viewers, local path)
+- Image/video lightbox with info overlay
+- Direct "Open local" button to view downloaded files
+- Badges: 🖼 IMG, ▶ VID, ⭐ CLOSE FRIENDS, 👁 SEEN, 👻 GHOST, 🟢 LIVE, ⏰ EXPIRED, 🗑 PURGED, 💾 LOCAL
+- CDN links greyed out and struck through on expired stories
+
+**UI**
+- Compact popup with real-time stats (blocked, users, stories)
+- iOS-style toggles for each privacy feature
+- Debug log panel with color-coded background/page/error messages
+- System theme support (follows OS dark/light preference)
 
 ## How it works
 
@@ -38,16 +62,20 @@ Instagram page load
     |-- content.js injects inject.js into page context (MAIN world)
     |
     |-- background.js intercepts HTTP via webRequest API
+    |   |-- Fetches full tray via /api/v1/feed/reels_tray/ (all users + seen timestamps)
     |   |-- Blocks PolarisStoriesV3SeenMutation (story seen)
     |   |-- Blocks useIGDMarkThreadAsReadValidationMutation (DM read)
+    |   |-- Lets useIGDMarkThreadAsReadMutation through (local read state)
     |   |-- Intercepts story responses via StreamFilter
     |   |-- Extracts doc_ids from JS bundles
-    |   |-- Auto-fetches stories, downloads media, exports CSV
-    |   '-- Lets useIGDMarkThreadAsReadMutation through (local read state)
+    |   |-- Auto-paginates GalleryQuery until no more results
+    |   |-- Downloads media, exports CSV, persists cache + seenHistory
+    |   '-- Tracks seen/ghost status per story via tray timestamps
     |
     '-- inject.js patches WebSocket.prototype.send in page context
-        |-- Filters typing_activity frames on gateway.instagram.com
-        '-- Filters co_presence heartbeat frames (online status)
+        |-- Filters typing_activity / indicate_activity frames
+        |-- Filters co_presence heartbeat frames (online status)
+        '-- Covers both gateway.instagram.com and edge-chat.instagram.com
 ```
 
 Settings propagation: popup -> background -> content.js -> inject.js (page context) via CustomEvent.
@@ -56,9 +84,9 @@ Settings propagation: popup -> background -> content.js -> inject.js (page conte
 
 Instagram is testing [Instagram Plus](https://techcrunch.com/2026/03/30/meta-starts-testing-a-premium-subscription-on-instagram/), a $2/month subscription. The headline feature? Anonymous story viewing. Meta projects [$2.4 billion in annual revenue](https://www.webpronews.com/meta-wants-you-to-pay-for-the-privilege-of-lurking-inside-instagrams-secret-story-viewing-test/) if 1% of users subscribe.
 
-The product is a `cancel: true` on a GraphQL call. That's the $2.4 billion business. Browser extensions doing this have existed since [2019](https://github.com/haikov/instaghost). Seven years. Nobody noticed. Now Meta wants to charge for it.
+The product is a `cancel: true` on a GraphQL call. That's the $2.4 billion business.
 
-This extension does everything Instagram Plus does and more. For free. Including things their subscription doesn't offer: DM read blocking, typing indicator blocking, presence blocking, media downloads, deletion detection, CSV export.
+This extension does everything Instagram Plus does and more. For free. Including things their subscription doesn't offer: DM read blocking, typing indicator blocking, presence blocking, media downloads, deletion detection, seen tracking, CSV export, story browser with metadata panels.
 
 ## Prior art
 
@@ -66,9 +94,12 @@ This extension does everything Instagram Plus does and more. For free. Including
 |---------|------|--------|-------------|
 | [instaghost](https://github.com/haikov/instaghost) | 2019 | Blocks REST `/api/v1/stories/reel/seen` | Probably not |
 | [incognito-viewer](https://github.com/yizzycool/instagram-story-incognito-viewer) | 2023 | Blocks REST seen via `declarativeNetRequest` | Probably not |
-| **This extension** | 2026 | Blocks GraphQL mutations + MQTT WebSocket | **Yes** |
+| [Ghostify](https://chromewebstore.google.com/detail/ghostify-hide-seen-typing/flpnibonbhdmnpgflnbemgghghhblmpm) | ~2023 | `declarativeNetRequest` + WS `indicate_activity` | Partial |
+| [better-instagram](https://github.com/dclstn/better-instagram) | ~2024 | XHR middleware on REST `/stories/reel/seen` | Probably not |
+| [instafn](https://github.com/xafn/instafn) | ~2025 | WS `is_typing` modification (sets to 0) | Partial |
+| **This extension** | 2026 | GraphQL mutations + MQTT WebSocket + tray API | **Yes** |
 
-Every prior implementation targets the old REST endpoint. None identified the GraphQL mutations. None handle DMs, typing, or presence. None cache, download, or detect deletions.
+Every prior implementation either targets the old REST endpoints (dead) or does partial blocking without caching, downloading, or tracking.
 
 ## Install
 
@@ -87,38 +118,59 @@ A signed XPI is available for self-hosting. The extension is submitted to AMO as
 | File | Purpose |
 |------|---------|
 | `manifest.json` | Extension config (MV2, Firefox, min version 142) |
-| `background.js` | HTTP interception, story caching, auto-fetch, downloads, CSV, settings |
-| `content.js` | SSR HTML parsing, injects inject.js, bridges settings to page context |
-| `inject.js` | Page context (MAIN world) - WebSocket monkey-patch for typing + presence |
+| `background.js` | HTTP interception, tray fetch, story caching, auto-fetch, downloads, CSV, seen tracking, settings |
+| `content.js` | SSR HTML parsing, header extraction, injects inject.js, bridges settings to page context |
+| `inject.js` | Page context (MAIN world) - WebSocket monkey-patch for typing + presence on both gateways |
 | `popup.html` | Compact popup with stats, toggles, debug log |
 | `popup.js` | Popup logic, settings management |
-| `stories.html` | Full-tab story browser with grid view, search, lightbox |
-| `stories.js` | Story browser logic, metadata panels, local file viewer |
+| `stories.html` | Full-tab story browser with grid view, search, sort, lightbox, theme support |
+| `stories.js` | Story browser logic, metadata panels, local file scanning, download merge |
 
 ## GraphQL endpoints
 
 | Query | Purpose | Action |
 |-------|---------|--------|
-| `PolarisStoriesV3ReelPageGalleryQuery` | Fetch stories | Intercepted + cached |
+| `PolarisStoriesV3ReelPageGalleryQuery` | Fetch stories | Intercepted + cached + paginated |
 | `PolarisStoriesV3ReelPageGalleryPaginationQuery` | Paginate stories | Intercepted + cached |
 | `PolarisStoriesV3SeenMutation` | Mark story as "seen" | **Blocked** |
 | `useIGDMarkThreadAsReadMutation` | Mark DM as read (local) | Allowed through |
 | `useIGDMarkThreadAsReadValidationMutation` | Send "seen" to sender | **Blocked** |
 
-## MQTT WebSocket (gateway.instagram.com)
+## REST API
 
-| Signal | Marker | Action |
-|--------|--------|--------|
-| Typing indicator | `typing_activity`, `is_typing` | **Blocked** |
-| Online presence | `co_presence`, `presence_heartbeat` | **Blocked** (off by default) |
+| Endpoint | Purpose | Action |
+|----------|---------|--------|
+| `/api/v1/feed/reels_tray/` | Full story tray with seen timestamps | Queried for user discovery + seen detection |
+
+## MQTT WebSocket
+
+| Gateway | Signal | Marker | Action |
+|---------|--------|--------|--------|
+| `gateway.instagram.com` | Typing | `typing_activity`, `is_typing` | **Blocked** |
+| `edge-chat.instagram.com` | Typing | `indicate_activity`, `is_typing` | **Blocked** |
+| Both | Presence | `co_presence`, `presence_heartbeat` | **Blocked** (off by default) |
+
+## Story status badges
+
+| Badge | Meaning |
+|-------|---------|
+| 🖼 IMG | Image story |
+| ▶ VID | Video story |
+| ⭐ CLOSE FRIENDS | Posted to poster's close friends list |
+| 👁 SEEN | You viewed this and the seen receipt was sent (before extension or with blocking off) |
+| 👻 GHOST | Viewed invisibly - seen receipt was blocked by extension |
+| 🟢 LIVE | Story is still active, CDN link valid |
+| ⏰ EXPIRED | Naturally expired after 24h |
+| 🗑 PURGED | Manually deleted by poster before 24h expiry - file still on your disk |
+| 💾 LOCAL | Only available from local disk (expired from cache) |
 
 ## Limitations
 
 - First page load requires one GraphQL call to capture headers
-- Pagination needs a captured template from a story click or auto-fetch
 - Online presence blocking is experimental (markers may need refinement)
-- CDN media URLs expire after hours; downloaded files persist
+- CDN media URLs expire after hours; downloaded files persist locally
 - Firefox only (MV2 with `webRequest` blocking)
+- Deletion detection requires the extension to be running when the story disappears
 
 ## Disclaimer
 
