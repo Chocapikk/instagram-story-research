@@ -168,7 +168,7 @@ A signed XPI is available for self-hosting. The extension is submitted to AMO as
 
 - First page load requires one GraphQL call to capture headers
 - Online presence blocking is experimental (markers may need refinement)
-- CDN media URLs expire after hours; downloaded files persist locally
+- CDN media URLs persist hours after story expiry (no auth required, shareable to anyone without an Instagram account). This likely exists for Instagram's Story Archive feature but means "expired" content is still publicly reachable. Close friends stories may have the same CDN behavior, making audience restrictions meaningless after expiry
 - Firefox only (MV2 with `webRequest` blocking)
 - Deletion detection requires the extension to be running when the story disappears
 
