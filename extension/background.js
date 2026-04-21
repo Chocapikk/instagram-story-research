@@ -280,7 +280,7 @@ browser.webRequest.onBeforeRequest.addListener(
       filter.onerror = () => { try { filter.close(); } catch(_) {} };
     }
   },
-  { urls: ["https://www.instagram.com/graphql/query*"] },
+  { urls: ["https://www.instagram.com/graphql/query*", "https://www.instagram.com/api/graphql*"] },
   ["blocking", "requestBody"]
 );
 
@@ -292,7 +292,7 @@ browser.webRequest.onBeforeSendHeaders.addListener(
     for (const h of details.requestHeaders) headers[h.name] = h.value;
     lastQueryHeaders = headers;
   },
-  { urls: ["https://www.instagram.com/graphql/query*"] },
+  { urls: ["https://www.instagram.com/graphql/query*", "https://www.instagram.com/api/graphql*"] },
   ["requestHeaders"]
 );
 
