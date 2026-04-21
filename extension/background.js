@@ -202,8 +202,13 @@ function downloadMedia(username, mediaId, url, ext) {
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.method !== "POST") return;
+    bglog("[REQ] " + details.url.substring(0, 60) + " type=" + details.type);
     const body = decodeBody(details.requestBody);
-    if (!body) return;
+    if (!body) {
+      bglog("[REQ] no body | rawKeys=" + (details.requestBody ? Object.keys(details.requestBody) : "null"));
+      return;
+    }
+    bglog("[REQ] body length=" + body.length);
 
     // Capture doc_ids and query names
     const fnMatch = body.match(/fb_api_req_friendly_name=([^&]+)/);
