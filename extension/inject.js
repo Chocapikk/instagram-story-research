@@ -4,7 +4,7 @@ if (window.__igResearchLoaded) { /* already loaded */ } else {
 window.__igResearchLoaded = true;
 
 // Settings (updated via CustomEvent from content script)
-let settings = { blockTyping: true, blockPresence: false };
+let settings = { blockTyping: true, blockPresence: false, blockDMRead: true };
 
 window.addEventListener("ig_research_settings", (e) => {
   if (e.detail) settings = { ...settings, ...e.detail };
@@ -90,6 +90,43 @@ WebSocket.prototype.send = function(data) {
 
   return originalWSSend.apply(this, arguments);
 };
+
+// ---------------------------------------------------------------------------
+// Monkey-patch fetch and sendBeacon to block DM read validation
+// ---------------------------------------------------------------------------
+
+const originalFetch = window.fetch;
+window.fetch = function(input, init) {
+  if (settings.blockDMRead) {
+    const url = (typeof input === "string" ? input : input?.url) || "";
+    const headers = init?.headers;
+    let friendly = "";
+    if (headers instanceof Headers) {
+      friendly = headers.get("X-FB-Friendly-Name") || "";
+    } else if (headers && typeof headers === "object") {
+      friendly = headers["X-FB-Friendly-Name"] || "";
+    }
+    if (friendly === "useIGDMarkThreadAsReadValidationMutation") {
+      pageLog("Blocked DMRead validation (fetch)");
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }
+  }
+  return originalFetch.apply(this, arguments);
+};
+
+const originalBeacon = navigator.sendBeacon;
+if (originalBeacon) {
+  navigator.sendBeacon = function(url, data) {
+    if (settings.blockDMRead && url && url.includes("/api/graphql")) {
+      const text = typeof data === "string" ? data : "";
+      if (text.includes("MarkThreadAsReadValidation")) {
+        pageLog("Blocked DMRead validation (sendBeacon)");
+        return true;
+      }
+    }
+    return originalBeacon.apply(this, arguments);
+  };
+}
 
 pageLog("Page context loaded - WS interception active (gateways: " + IG_WS_HOSTS.join(", ") + ")");
 
