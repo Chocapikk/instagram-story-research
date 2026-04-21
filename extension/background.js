@@ -303,7 +303,6 @@ browser.webRequest.onBeforeSendHeaders.addListener(
 
     // Block DM read validation via header
     const friendlyName = headers["X-FB-Friendly-Name"] || "";
-    if (friendlyName.includes("MarkThread") || friendlyName.includes("DMRead")) bglog("[HDR] " + friendlyName);
     if (settings.blockDMRead && friendlyName.includes("MarkThreadAsRead")) {
       blockedCount++;
       bglog("Blocked DMRead #" + blockedCount + " (" + friendlyName + ")");
@@ -733,15 +732,6 @@ browser.webRequest.onBeforeRequest.addListener(
   ["blocking"]
 );
 
-// Debug: log ALL requests that match worker patterns
-browser.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    if (details.url.includes("worker") || details.url.includes("init_script")) {
-      bglog("[WORKER URL] " + details.type + " " + details.url.substring(0, 120));
-    }
-  },
-  { urls: ["https://www.instagram.com/*"] }
-);
 
 // ---------------------------------------------------------------------------
 // Message handler
