@@ -69,6 +69,22 @@ WebSocket.prototype.send = function(data) {
     return originalWSSend.apply(this, arguments);
   }
 
+  // Decode ALL frames for DM read detection (not just < 500 bytes)
+  let fullText = null;
+  try {
+    const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : (data instanceof Uint8Array ? data : null);
+    if (bytes) fullText = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    else if (typeof data === "string") fullText = data;
+  } catch(_) {}
+
+  // Log outgoing WS messages that contain read/thread/mark keywords
+  if (fullText && (fullText.includes("read") || fullText.includes("mark") || fullText.includes("seen"))) {
+    pageLog("[WS OUT] len=" + (fullText?.length || 0) + " contains: " +
+      (fullText.includes("read") ? "read " : "") +
+      (fullText.includes("mark") ? "mark " : "") +
+      (fullText.includes("seen") ? "seen " : ""));
+  }
+
   const text = decodeFrame(data);
   if (text === null) {
     return originalWSSend.apply(this, arguments);
