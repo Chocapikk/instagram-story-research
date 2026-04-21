@@ -77,17 +77,19 @@ WebSocket.prototype.send = function(data) {
     else if (typeof data === "string") fullText = data;
   } catch(_) {}
 
-  // Debug: dump ALL readable strings from every outgoing WS frame
-  if (fullText) {
-    const strings = [];
-    let current = "";
-    for (let i = 0; i < fullText.length; i++) {
-      const c = fullText.charCodeAt(i);
-      if (c >= 32 && c <= 126) current += fullText[i];
-      else { if (current.length >= 4) strings.push(current); current = ""; }
-    }
-    if (current.length >= 4) strings.push(current);
-    if (strings.length > 0) pageLog("[WS OUT] len=" + fullText.length + " " + JSON.stringify(strings));
+  // Log Lightspeed /ls_req frames (DM operations) for read receipt identification
+  if (fullText && fullText.includes("/ls_req")) {
+    try {
+      const jsonStart = fullText.indexOf("{");
+      if (jsonStart >= 0) {
+        const parsed = JSON.parse(fullText.substring(jsonStart));
+        const payload = JSON.parse(parsed.payload || "{}");
+        const tasks = payload.tasks || [];
+        for (const t of tasks) {
+          pageLog("[LS] label=" + t.label + " queue=" + t.queue_name + " payload=" + t.payload);
+        }
+      }
+    } catch(_) {}
   }
 
   const text = decodeFrame(data);

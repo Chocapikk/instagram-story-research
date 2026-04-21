@@ -209,13 +209,8 @@ function downloadMedia(username, mediaId, url, ext) {
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.method !== "POST") return;
-    bglog("[REQ] " + details.url.substring(0, 60) + " type=" + details.type);
     const body = decodeBody(details.requestBody);
-    if (!body) {
-      bglog("[REQ] no body | rawKeys=" + (details.requestBody ? Object.keys(details.requestBody) : "null"));
-      return;
-    }
-    bglog("[REQ] body length=" + body.length);
+    if (!body) return;
 
     // Capture doc_ids and query names
     const fnMatch = body.match(/fb_api_req_friendly_name=([^&]+)/);
@@ -302,25 +297,15 @@ browser.webRequest.onBeforeRequest.addListener(
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     if (details.method !== "POST") return;
-    bglog("[HEADERS] " + details.url.substring(0, 60));
     const headers = {};
-    const headerNames = [];
-    for (const h of details.requestHeaders) {
-      headers[h.name] = h.value;
-      headerNames.push(h.name);
-    }
+    for (const h of details.requestHeaders) headers[h.name] = h.value;
     lastQueryHeaders = headers;
 
+    // Block DM read validation via header
     const friendlyName = headers["X-FB-Friendly-Name"] || "";
-    bglog("[HEADERS] friendly=" + (friendlyName || "NONE") + " | blockDMRead=" + settings.blockDMRead + " | allHeaders=" + headerNames.join(","));
-
-    if (friendlyName.includes("MarkThread")) {
-      bglog("[HEADERS] !!! DM READ DETECTED: " + friendlyName);
-    }
-
     if (settings.blockDMRead && friendlyName === "useIGDMarkThreadAsReadValidationMutation") {
       blockedCount++;
-      bglog("[HEADERS] BLOCKED DMRead #" + blockedCount);
+      bglog("Blocked DMRead #" + blockedCount + " (header)");
       pushStats();
       return { cancel: true };
     }

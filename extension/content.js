@@ -92,12 +92,21 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Inject page-context script (MAIN world) for WebSocket interception
+// Inject page-context script (MAIN world) ASAP for WebSocket/fetch interception
 function injectPageScript() {
   const s = document.createElement("script");
   s.src = browser.runtime.getURL("inject.js");
   s.onload = () => s.remove();
-  (document.head || document.documentElement).appendChild(s);
+  const target = document.head || document.documentElement;
+  if (target) {
+    target.appendChild(s);
+  } else {
+    // document_start: no DOM yet, wait for first element
+    new MutationObserver((_, obs) => {
+      const t = document.head || document.documentElement;
+      if (t) { t.appendChild(s); obs.disconnect(); }
+    }).observe(document, { childList: true, subtree: true });
+  }
 }
 
 // Forward settings to page context

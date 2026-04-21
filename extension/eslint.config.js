@@ -35,7 +35,10 @@ module.exports = [
         Date: "readonly",
         Math: "readonly",
         HTMLElement: "readonly",
-        Chart: "readonly"
+        Chart: "readonly",
+        MutationObserver: "readonly",
+        navigator: "readonly",
+        Request: "readonly"
       }
     },
     rules: {
