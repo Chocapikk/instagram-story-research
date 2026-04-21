@@ -686,6 +686,54 @@ browser.webRequest.onBeforeRequest.addListener(
 );
 
 // ---------------------------------------------------------------------------
+// SharedWorker fetch interception - inject DM read blocking into worker script
+// ---------------------------------------------------------------------------
+
+browser.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (!settings.blockDMRead) return;
+    const filter = browser.webRequest.filterResponseData(details.requestId);
+    const chunks = [];
+    filter.ondata = (event) => { chunks.push(new Uint8Array(event.data)); };
+    filter.onstop = () => {
+      const text = mergeChunks(chunks);
+      // Prepend fetch patch to the worker script
+      const patch = `
+// IG Ghost Mode - DM read blocking patch (injected by extension)
+(function() {
+  var _origFetch = self.fetch;
+  self.fetch = function(input, init) {
+    var fn = "";
+    try {
+      if (init && init.headers) {
+        if (typeof init.headers.get === "function") fn = init.headers.get("X-FB-Friendly-Name") || "";
+        else if (typeof init.headers === "object") fn = init.headers["X-FB-Friendly-Name"] || "";
+      }
+      if (!fn && input && typeof input === "object" && input.headers) {
+        if (typeof input.headers.get === "function") fn = input.headers.get("X-FB-Friendly-Name") || "";
+      }
+    } catch(e) {}
+    if (fn === "useIGDMarkThreadAsReadValidationMutation") {
+      console.log("[IG Worker Patch] Blocked DMRead validation");
+      return Promise.resolve(new Response('{"data":{}}', {status: 200, headers: {"Content-Type": "application/json"}}));
+    }
+    return _origFetch.apply(this, arguments);
+  };
+  console.log("[IG Worker Patch] fetch patched in worker");
+})();
+`;
+      const encoder = new TextEncoder();
+      filter.write(encoder.encode(patch + text));
+      filter.close();
+      bglog("Injected DM read patch into SharedWorker script");
+    };
+    filter.onerror = () => { try { filter.close(); } catch(_) {} };
+  },
+  { urls: ["https://www.instagram.com/static_resources/webworker/*"], types: ["script", "other"] },
+  ["blocking"]
+);
+
+// ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
 
