@@ -79,7 +79,13 @@ document.getElementById("refresh").addEventListener("click", async () => {
 });
 
 document.getElementById("viewStories").addEventListener("click", () => {
-  browser.tabs.create({ url: browser.runtime.getURL("stories.html") });
+  const url = browser.runtime.getURL("stories.html");
+  try {
+    browser.tabs.create({ url });
+  } catch(_) {
+    // Fallback for iframe context
+    window.open(url, "_blank");
+  }
 });
 
 document.getElementById("export").addEventListener("click", async () => {
