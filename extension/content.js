@@ -92,7 +92,52 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Inject page-context script (MAIN world) ASAP for WebSocket/fetch interception
+// Inject CRITICAL fetch/sendBeacon patches INLINE before any Instagram code runs
+function injectEarlyPatches() {
+  const code = `
+    if (!window.__igEarlyPatch) {
+      window.__igEarlyPatch = true;
+      window.__igBlockDMRead = true;
+      const _fetch = window.fetch;
+      window.fetch = function(input, init) {
+        if (window.__igBlockDMRead) {
+          var h = init && init.headers;
+          var fn = "";
+          if (h instanceof Headers) fn = h.get("X-FB-Friendly-Name") || "";
+          else if (h && typeof h === "object") fn = h["X-FB-Friendly-Name"] || "";
+          if (!fn && input instanceof Request) fn = input.headers.get("X-FB-Friendly-Name") || "";
+          if (fn === "useIGDMarkThreadAsReadValidationMutation") {
+            console.log("[IG Patch] Blocked DMRead validation (fetch)");
+            return Promise.resolve(new Response('{"data":{}}', {status:200}));
+          }
+        }
+        return _fetch.apply(this, arguments);
+      };
+      var _beacon = navigator.sendBeacon;
+      if (_beacon) {
+        navigator.sendBeacon = function(url, data) {
+          if (window.__igBlockDMRead && url && url.includes("/api/graphql")) {
+            var t = typeof data === "string" ? data : "";
+            if (t.includes("MarkThreadAsReadValidation")) {
+              console.log("[IG Patch] Blocked DMRead validation (beacon)");
+              return true;
+            }
+          }
+          return _beacon.apply(this, arguments);
+        };
+      }
+    }
+  `;
+  const s = document.createElement("script");
+  s.textContent = code;
+  (document.documentElement || document).appendChild(s);
+  s.remove();
+}
+
+// Run immediately at document_start
+injectEarlyPatches();
+
+// Inject full page-context script (MAIN world) for WebSocket/typing/presence
 function injectPageScript() {
   const s = document.createElement("script");
   s.src = browser.runtime.getURL("inject.js");
@@ -101,7 +146,6 @@ function injectPageScript() {
   if (target) {
     target.appendChild(s);
   } else {
-    // document_start: no DOM yet, wait for first element
     new MutationObserver((_, obs) => {
       const t = document.head || document.documentElement;
       if (t) { t.appendChild(s); obs.disconnect(); }
@@ -138,6 +182,11 @@ if (document.readyState === "complete") {
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "pushSettings") {
     window.dispatchEvent(new CustomEvent("ig_research_settings", { detail: msg.settings }));
+    // Sync DM read setting with early patch
+    const sync = document.createElement("script");
+    sync.textContent = "window.__igBlockDMRead = " + !!msg.settings.blockDMRead + ";";
+    document.documentElement.appendChild(sync);
+    sync.remove();
     sendResponse({ ok: true });
   }
   return true;
