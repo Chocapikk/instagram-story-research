@@ -59,18 +59,72 @@ function extractHeaders() {
   return { csrf: csrfVal, lsd };
 }
 
-// Floating panel
-let panelFrame = null;
+// Floating panel with drag + resize
+let panelWrap = null;
 function togglePanel() {
-  if (panelFrame) {
-    panelFrame.remove();
-    panelFrame = null;
+  if (panelWrap) {
+    panelWrap.remove();
+    panelWrap = null;
     return;
   }
-  panelFrame = document.createElement("iframe");
-  panelFrame.src = browser.runtime.getURL("popup.html");
-  panelFrame.style.cssText = "position:fixed;top:8px;right:8px;width:390px;height:600px;z-index:999999;border:1px solid #30363d;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0d1117;resize:both;overflow:auto;min-width:280px;min-height:300px;";
-  document.body.appendChild(panelFrame);
+  panelWrap = document.createElement("div");
+  panelWrap.style.cssText = "position:fixed;top:8px;right:8px;width:390px;height:600px;z-index:999999;border:1px solid #30363d;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0d1117;display:flex;flex-direction:column;";
+
+  // Title bar for dragging
+  const bar = document.createElement("div");
+  bar.style.cssText = "height:28px;background:#161b22;border-radius:12px 12px 0 0;cursor:move;display:flex;align-items:center;padding:0 10px;flex-shrink:0;user-select:none;";
+  bar.innerHTML = '<span style="color:#8b949e;font-size:11px;font-family:sans-serif;">IG Ghost Mode</span><span style="margin-left:auto;color:#8b949e;cursor:pointer;font-size:14px;" id="igPanelClose">&times;</span>';
+  panelWrap.appendChild(bar);
+
+  // Iframe
+  const frame = document.createElement("iframe");
+  frame.src = browser.runtime.getURL("popup.html");
+  frame.style.cssText = "flex:1;border:none;border-radius:0 0 12px 12px;width:100%;";
+  panelWrap.appendChild(frame);
+
+  // Resize handle
+  const handle = document.createElement("div");
+  handle.style.cssText = "position:absolute;bottom:0;right:0;width:16px;height:16px;cursor:nwse-resize;";
+  panelWrap.appendChild(handle);
+
+  document.body.appendChild(panelWrap);
+
+  // Close button
+  panelWrap.querySelector("#igPanelClose").addEventListener("click", togglePanel);
+
+  // Drag
+  let dx = 0, dy = 0, dragging = false;
+  bar.addEventListener("mousedown", (e) => {
+    dragging = true;
+    dx = e.clientX - panelWrap.offsetLeft;
+    dy = e.clientY - panelWrap.offsetTop;
+    e.preventDefault();
+  });
+
+  // Resize
+  let resizing = false, rw = 0, rh = 0, rx = 0, ry = 0;
+  handle.addEventListener("mousedown", (e) => {
+    resizing = true;
+    rw = panelWrap.offsetWidth;
+    rh = panelWrap.offsetHeight;
+    rx = e.clientX;
+    ry = e.clientY;
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (dragging) {
+      panelWrap.style.left = (e.clientX - dx) + "px";
+      panelWrap.style.top = (e.clientY - dy) + "px";
+      panelWrap.style.right = "auto";
+    }
+    if (resizing) {
+      panelWrap.style.width = Math.max(280, rw + e.clientX - rx) + "px";
+      panelWrap.style.height = Math.max(300, rh + e.clientY - ry) + "px";
+    }
+  });
+
+  document.addEventListener("mouseup", () => { dragging = false; resizing = false; });
 }
 
 // Listen for on-demand extraction from background/popup
