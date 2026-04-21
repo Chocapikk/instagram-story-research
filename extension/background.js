@@ -203,7 +203,10 @@ browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.method !== "POST") return;
     const body = decodeBody(details.requestBody);
-    if (!body) return;
+    if (!body) {
+      bglog("Empty body for: " + details.url.substring(0, 80));
+      return;
+    }
 
     // Capture doc_ids and query names
     const fnMatch = body.match(/fb_api_req_friendly_name=([^&]+)/);
