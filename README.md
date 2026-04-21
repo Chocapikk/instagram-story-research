@@ -11,7 +11,7 @@ Full writeup: [Instagram's "Seen" Is a Lie](https://chocapikk.com/posts/2026/ins
 | Signal | Mechanism | What's blocked | Toggle |
 |--------|-----------|---------------|--------|
 | Story seen | GraphQL POST | `PolarisStoriesV3SeenMutation` | Story seen |
-| DM read | GraphQL POST | `useIGDMarkThreadAsReadValidationMutation` | DM read |
+| DM read | GraphQL POST + SharedWorker | Both `MarkThreadAsRead` mutations | DM read |
 | Typing indicator | MQTT WebSocket | `typing_activity` / `indicate_activity` | Typing |
 | Online presence | MQTT WebSocket | `co_presence` heartbeat | Online |
 
@@ -61,11 +61,14 @@ Instagram page load
     |-- content.js extracts tray user IDs from SSR HTML
     |-- content.js injects inject.js into page context (MAIN world)
     |
+    |-- content.js patches window.fetch via wrappedJSObject at document_start
+    |   '-- Blocks DM read mutations before Instagram code loads
+    |
     |-- background.js intercepts HTTP via webRequest API
     |   |-- Fetches full tray via /api/v1/feed/reels_tray/ (all users + seen timestamps)
     |   |-- Blocks PolarisStoriesV3SeenMutation (story seen)
-    |   |-- Blocks useIGDMarkThreadAsReadValidationMutation (DM read)
-    |   |-- Lets useIGDMarkThreadAsReadMutation through (local read state)
+    |   |-- Blocks both MarkThreadAsRead mutations via onBeforeSendHeaders
+    |   |-- Injects fetch patch into SharedWorker via filterResponseData
     |   |-- Intercepts story responses via StreamFilter
     |   |-- Extracts doc_ids from JS bundles
     |   |-- Auto-paginates GalleryQuery until no more results
@@ -79,6 +82,13 @@ Instagram page load
 ```
 
 Settings propagation: popup -> background -> content.js -> inject.js (page context) via CustomEvent.
+
+DM read blocking uses three layers:
+1. `webRequest.onBeforeSendHeaders` - blocks both mutations via `X-FB-Friendly-Name` header
+2. `wrappedJSObject` + `exportFunction` - patches `fetch` synchronously at `document_start` (Firefox API)
+3. `filterResponseData` on `/static_resources/webworker/init_script/` - injects `fetch` patch into Instagram's SharedWorker (`IGDAWMainWebWorkerBundle`) before it executes
+
+The SharedWorker injection is necessary because Instagram sends the DM read validation mutation from a SharedWorker context that has its own `fetch`, invisible to page-level patches and unreliable via `webRequest`.
 
 ## The $2 billion punchline
 
@@ -119,9 +129,9 @@ A signed XPI is available for self-hosting. The extension is submitted to AMO as
 |------|---------|
 | `manifest.json` | Extension config (MV2, Firefox, min version 142) |
 | `background.js` | HTTP interception, tray fetch, story caching, auto-fetch, downloads, CSV, seen tracking, settings |
-| `content.js` | SSR HTML parsing, header extraction, injects inject.js, bridges settings to page context |
-| `inject.js` | Page context (MAIN world) - WebSocket monkey-patch for typing + presence on both gateways |
-| `popup.html` | Compact popup with stats, toggles, debug log |
+| `content.js` | SSR HTML parsing, header extraction, `wrappedJSObject` fetch patch, injects inject.js, floating panel, bridges settings |
+| `inject.js` | Page context (MAIN world) - WebSocket monkey-patch for typing + presence, Lightspeed task logging |
+| `popup.html` | Compact popup/panel with stats, toggles, debug log |
 | `popup.js` | Popup logic, settings management |
 | `stories.html` | Full-tab story browser with grid view, search, sort, lightbox, theme support |
 | `stories.js` | Story browser logic, metadata panels, local file scanning, download merge |
@@ -133,8 +143,8 @@ A signed XPI is available for self-hosting. The extension is submitted to AMO as
 | `PolarisStoriesV3ReelPageGalleryQuery` | Fetch stories | Intercepted + cached + paginated |
 | `PolarisStoriesV3ReelPageGalleryPaginationQuery` | Paginate stories | Intercepted + cached |
 | `PolarisStoriesV3SeenMutation` | Mark story as "seen" | **Blocked** |
-| `useIGDMarkThreadAsReadMutation` | Mark DM as read (local) | Allowed through |
-| `useIGDMarkThreadAsReadValidationMutation` | Send "seen" to sender | **Blocked** |
+| `useIGDMarkThreadAsReadMutation` | Mark DM as read + reports to server | **Blocked** (via `onBeforeSendHeaders`) |
+| `useIGDMarkThreadAsReadValidationMutation` | Async confirmation via SharedWorker | **Blocked** (via worker `fetch` injection) |
 
 ## REST API
 
@@ -168,9 +178,11 @@ A signed XPI is available for self-hosting. The extension is submitted to AMO as
 
 - First page load requires one GraphQL call to capture headers
 - Online presence blocking is experimental (markers may need refinement)
-- CDN media URLs persist hours after story expiry (no auth required, shareable to anyone without an Instagram account). This likely exists for Instagram's Story Archive feature but means "expired" content is still publicly reachable. Close friends stories may have the same CDN behavior, making audience restrictions meaningless after expiry
-- Firefox only (MV2 with `webRequest` blocking)
+- DM read blocking requires the SharedWorker to reload (first page load after extension install). The worker script is patched via `filterResponseData` - if the worker was already running before the extension loaded, it won't be patched until the next full page reload
+- CDN media URLs persist 2-5 days after story expiry (no auth required, shareable to anyone without an Instagram account). Close friends stories use the same CDN with no additional access control
+- Firefox only (MV2 with `webRequest` blocking + `wrappedJSObject` + `exportFunction` + `filterResponseData`)
 - Deletion detection requires the extension to be running when the story disappears
+- Instagram's mobile "disable read receipts" toggle is client-side only. Users who disabled it on mobile are still visible as "read" on the web client of the receiving account. The toggle blocks one client, not the server
 
 ## Disclaimer
 
