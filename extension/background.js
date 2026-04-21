@@ -44,6 +44,7 @@ function bglog(...args) {
 
 // State
 let storyCache = {};
+const freshItemIds = new Map(); // userId -> Set of mediaIds seen from server in current fetch cycle
 let blockedCount = 0;
 const capturedDocIds = {};
 let allReelIds = [];
@@ -330,6 +331,10 @@ function processStoryData(data) {
       const mediaId = item.id || item.pk;
       if (!mediaId) continue;
 
+      // Track fresh item IDs from server for purge detection
+      if (!freshItemIds.has(String(userId))) freshItemIds.set(String(userId), new Set());
+      freshItemIds.get(String(userId)).add(String(mediaId));
+
       // Update seen status on existing cached items
       if (storyCache[userId].items[mediaId]) {
         const existing = storyCache[userId].items[mediaId];
@@ -378,42 +383,7 @@ function processStoryData(data) {
     }
   }
 
-  // Detect purged stories: cached items that no longer appear in fresh server data
-  const now2 = Math.floor(Date.now() / 1000);
-  const freshUserIds = new Set(reels.map(r => String(r.id || r.user?.id)).filter(Boolean));
 
-  // Case 1: user reel exists in response but some items are missing
-  for (const reel of reels) {
-    const userId = reel.id || reel.user?.id;
-    if (!userId || !storyCache[userId]) continue;
-    const freshIds = new Set((reel.items || reel.media || []).map(i => String(i.id || i.pk)).filter(Boolean));
-    if (freshIds.size === 0) continue;
-    for (const [mediaId, item] of Object.entries(storyCache[userId].items)) {
-      if (item.deleted) continue;
-      if (freshIds.has(String(mediaId))) continue;
-      if (item.expiring_at && now2 < item.expiring_at) {
-        item.deleted = true;
-        item.deleted_at = Date.now();
-        bglog("PURGED: " + storyCache[userId].username + " / " + mediaId);
-      }
-    }
-  }
-
-  // Case 2: user had stories in cache but entire reel is gone from response
-  // Only check if we got a meaningful response (at least 1 reel) to avoid false positives
-  if (reels.length > 0) {
-    for (const [userId, userData] of Object.entries(storyCache)) {
-      if (freshUserIds.has(String(userId))) continue;
-      for (const [mediaId, item] of Object.entries(userData.items)) {
-        if (item.deleted) continue;
-        if (item.expiring_at && now2 < item.expiring_at) {
-          item.deleted = true;
-          item.deleted_at = Date.now();
-          bglog("PURGED (reel gone): " + userData.username + " / " + mediaId);
-        }
-      }
-    }
-  }
 
   // Trigger pagination for missing users
   const cachedIds = new Set(Object.keys(storyCache));
@@ -443,7 +413,6 @@ function tryAutoFetch() {
   autoFetchRetries = 0;
 }
 
-let selfFetchIds = new Set();
 
 async function ensureHeaders() {
   if (lastQueryHeaders["X-CSRFToken"]) return;
@@ -514,6 +483,28 @@ async function buildAndFireGalleryQuery(trayIds) {
       allReelIds = merged;
       browser.storage.local.set({ reelIds: allReelIds });
     }
+
+    // Purge detection: users in cache but NOT in tray with non-expired items
+    const trayIdSet = new Set(newIds.map(String));
+    const nowPurge = Math.floor(Date.now() / 1000);
+    let trayPurgeCount = 0;
+    for (const [userId, userData] of Object.entries(storyCache)) {
+      if (trayIdSet.has(String(userId))) continue;
+      for (const [mediaId, item] of Object.entries(userData.items)) {
+        if (item.deleted) continue;
+        if (item.expiring_at && nowPurge < item.expiring_at) {
+          item.deleted = true;
+          item.deleted_at = Date.now();
+          trayPurgeCount++;
+          bglog("PURGED (not in tray): " + userData.username + " / " + mediaId + " (" + Math.round((item.expiring_at - nowPurge) / 60) + "min left)");
+        }
+      }
+    }
+    if (trayPurgeCount > 0) {
+      bglog("Tray purge: " + trayPurgeCount + " stories marked");
+      browser.storage.local.set({ storyCache });
+      exportCSV();
+    }
   }
 
   bglog("Building GalleryQuery for", trayIds.length, "users");
@@ -567,6 +558,30 @@ async function buildAndFireGalleryQuery(trayIds) {
   }
 
   bglog("GalleryQuery complete -", page, "pages fetched");
+
+  // Purge detection: compare freshItemIds (accumulated across all pages) against cache
+  const nowSec = Math.floor(Date.now() / 1000);
+  let purgeCount = 0;
+  for (const [userId, userData] of Object.entries(storyCache)) {
+    const userFresh = freshItemIds.get(String(userId));
+    if (!userFresh || userFresh.size === 0) continue; // user wasn't in this fetch cycle
+    for (const [mediaId, item] of Object.entries(userData.items)) {
+      if (item.deleted) continue;
+      if (userFresh.has(String(mediaId))) continue;
+      if (item.expiring_at && nowSec < item.expiring_at) {
+        item.deleted = true;
+        item.deleted_at = Date.now();
+        purgeCount++;
+        bglog("PURGED: " + userData.username + " / " + mediaId + " (" + Math.round((item.expiring_at - nowSec) / 60) + "min left)");
+      }
+    }
+  }
+  if (purgeCount > 0) {
+    bglog("Purge detection: " + purgeCount + " stories marked as purged");
+    browser.storage.local.set({ storyCache });
+    exportCSV();
+  }
+  freshItemIds.clear();
 }
 
 async function fetchMissingReels(missingIds) {

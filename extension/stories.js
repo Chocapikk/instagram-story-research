@@ -317,12 +317,12 @@ function buildCard(username, item) {
     const postedMs = item.timestamp ? item.timestamp * 1000 : 0;
     const deletedMs = item.deleted_at || 0;
     const cachedMs = item.cached_at || 0;
-    let titleParts = ["Manually deleted by poster"];
+    let titleParts = ["Deleted by poster before 24h expiry"];
     if (postedMs && deletedMs) {
-      titleParts.push("Lived: " + durationStr(deletedMs - postedMs));
+      titleParts.push("Was live for " + durationStr(deletedMs - postedMs));
     }
     if (cachedMs && deletedMs && !item.seenBlocked) {
-      titleParts.push("You saw it " + durationStr(deletedMs - cachedMs) + " before deletion");
+      titleParts.push("Cached " + durationStr(deletedMs - cachedMs) + " before deletion");
     }
     del.title = titleParts.join(" | ");
     top.appendChild(del);
@@ -332,15 +332,15 @@ function buildCard(username, item) {
       const dur = document.createElement("span");
       dur.className = "story-time";
       dur.style.color = "#f85149";
-      dur.textContent = "\u23F1 " + durationStr(deletedMs - postedMs);
-      dur.title = "Story lived " + durationStr(deletedMs - postedMs) + " before being deleted";
+      dur.textContent = "\u23F1 Lived " + durationStr(deletedMs - postedMs);
+      dur.title = "Posted, then deleted " + durationStr(deletedMs - postedMs) + " later";
       top.appendChild(dur);
     }
   } else if (isExpired) {
     const exp = document.createElement("span");
     exp.className = "badge badge-expired";
     exp.textContent = "\u23F0 EXPIRED";
-    exp.title = "Naturally expired at " + formatDate(item.expiring_at);
+    exp.title = "Expired naturally after 24h at " + formatDate(item.expiring_at);
     top.appendChild(exp);
   } else if (item.expiring_at) {
     const live = document.createElement("span");
