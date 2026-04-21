@@ -203,10 +203,7 @@ browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.method !== "POST") return;
     const body = decodeBody(details.requestBody);
-    if (!body) {
-      bglog("Empty body for: " + details.url.substring(0, 80));
-      return;
-    }
+    if (!body) return;
 
     // Capture doc_ids and query names
     const fnMatch = body.match(/fb_api_req_friendly_name=([^&]+)/);
@@ -250,15 +247,8 @@ browser.webRequest.onBeforeRequest.addListener(
       }
     }
 
-    // Block DM read receipts (if enabled)
-    if (body.includes("MarkThreadAsRead")) {
-      bglog("DM read detected: " + (body.includes("Validation") ? "Validation" : "Local") + " | blockDMRead=" + settings.blockDMRead);
-    }
-    if (settings.blockDMRead && DM_READ_MUTATIONS.some(m => body.includes(m))) {
-      blockedCount++;
-      bglog("Blocked DMRead #" + blockedCount);
-      return { cancel: true };
-    }
+    // DM read blocking is handled in onBeforeSendHeaders via X-FB-Friendly-Name header
+    // (the Validation mutation sends no parseable body)
 
     // Capture pagination template
     if (body.includes("PolarisStoriesV3ReelPageGalleryPaginationQuery")) {
@@ -290,16 +280,24 @@ browser.webRequest.onBeforeRequest.addListener(
   ["blocking", "requestBody"]
 );
 
-// Capture headers from any GraphQL call
+// Capture headers + block DM read via header inspection
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     if (details.method !== "POST") return;
     const headers = {};
     for (const h of details.requestHeaders) headers[h.name] = h.value;
     lastQueryHeaders = headers;
+
+    // Block DM read validation via X-FB-Friendly-Name header
+    const friendlyName = headers["X-FB-Friendly-Name"] || "";
+    if (settings.blockDMRead && friendlyName === "useIGDMarkThreadAsReadValidationMutation") {
+      blockedCount++;
+      bglog("Blocked DMRead #" + blockedCount + " (via header)");
+      return { cancel: true };
+    }
   },
   { urls: ["https://www.instagram.com/graphql/query*", "https://www.instagram.com/api/graphql*"] },
-  ["requestHeaders"]
+  ["blocking", "requestHeaders"]
 );
 
 // ---------------------------------------------------------------------------
