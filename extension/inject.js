@@ -77,9 +77,8 @@ WebSocket.prototype.send = function(data) {
     else if (typeof data === "string") fullText = data;
   } catch(_) {}
 
-  // Debug: dump readable strings from WS frames containing "read" or "mark"
-  if (fullText && (fullText.includes("read") || fullText.includes("mark"))) {
-    // Extract all readable ASCII sequences (4+ chars) from the binary frame
+  // Debug: dump ALL readable strings from every outgoing WS frame
+  if (fullText) {
     const strings = [];
     let current = "";
     for (let i = 0; i < fullText.length; i++) {
@@ -88,8 +87,7 @@ WebSocket.prototype.send = function(data) {
       else { if (current.length >= 4) strings.push(current); current = ""; }
     }
     if (current.length >= 4) strings.push(current);
-    const relevant = strings.filter(s => s.includes("read") || s.includes("mark") || s.includes("thread") || s.includes("seen"));
-    pageLog("[WS OUT] len=" + fullText.length + " strings=" + JSON.stringify(relevant));
+    if (strings.length > 0) pageLog("[WS OUT] len=" + fullText.length + " " + JSON.stringify(strings));
   }
 
   const text = decodeFrame(data);
