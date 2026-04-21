@@ -40,6 +40,13 @@ function bglog(...args) {
   bgLog.push(line);
   if (bgLog.length > 200) bgLog.shift();
   console.log("[IG]", msg);
+  // Push to popup in real-time
+  browser.runtime.sendMessage({ type: "logUpdate", line }).catch(_ => {});
+}
+
+function pushStats() {
+  const s = cacheStats();
+  browser.runtime.sendMessage({ type: "statsUpdate", blockedCount, ...s }).catch(_ => {});
 }
 
 // State
@@ -238,6 +245,7 @@ browser.webRequest.onBeforeRequest.addListener(
         }
         blockedCount++;
         bglog("Blocked StorySeen #" + blockedCount, reelId ? "(reel " + reelId + ")" : "");
+        pushStats();
         return { cancel: true };
       }
       // Seen not blocked - mark stories as seen (vu lâché)
@@ -256,6 +264,7 @@ browser.webRequest.onBeforeRequest.addListener(
     if (settings.blockDMRead && DM_READ_MUTATIONS.some(m => body.includes(m))) {
       blockedCount++;
       bglog("Blocked DMRead #" + blockedCount + " (via body)");
+      pushStats();
       return { cancel: true };
     }
 
@@ -312,6 +321,7 @@ browser.webRequest.onBeforeSendHeaders.addListener(
     if (settings.blockDMRead && friendlyName === "useIGDMarkThreadAsReadValidationMutation") {
       blockedCount++;
       bglog("[HEADERS] BLOCKED DMRead #" + blockedCount);
+      pushStats();
       return { cancel: true };
     }
   },

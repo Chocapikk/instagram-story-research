@@ -148,5 +148,16 @@ syncLogs();
 updateStats();
 log("Popup ready");
 
-// Auto-refresh stats and logs every second
-setInterval(() => { syncLogs(); updateStats(); }, 1000);
+// Real-time updates from background
+browser.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "statsUpdate") {
+    document.getElementById("statBlocked").textContent = msg.blockedCount || 0;
+    document.getElementById("statUsers").textContent = msg.users || 0;
+    document.getElementById("statStories").textContent = msg.stories || 0;
+  }
+  if (msg.type === "logUpdate" && msg.line) {
+    logLines.push(msg.line);
+    if (logLines.length > 200) logLines.shift();
+    renderLog();
+  }
+});
