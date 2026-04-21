@@ -97,19 +97,26 @@ WebSocket.prototype.send = function(data) {
 
 const originalFetch = window.fetch;
 window.fetch = function(input, init) {
-  if (settings.blockDMRead) {
-    const url = (typeof input === "string" ? input : input?.url) || "";
-    const headers = init?.headers;
-    let friendly = "";
-    if (headers instanceof Headers) {
-      friendly = headers.get("X-FB-Friendly-Name") || "";
-    } else if (headers && typeof headers === "object") {
-      friendly = headers["X-FB-Friendly-Name"] || "";
-    }
-    if (friendly === "useIGDMarkThreadAsReadValidationMutation") {
-      pageLog("Blocked DMRead validation (fetch)");
-      return Promise.resolve(new Response("{}", { status: 200 }));
-    }
+  const url = (typeof input === "string" ? input : input?.url) || "";
+  const headers = init?.headers;
+  let friendly = "";
+  if (headers instanceof Headers) {
+    friendly = headers.get("X-FB-Friendly-Name") || "";
+  } else if (headers && typeof headers === "object") {
+    friendly = headers["X-FB-Friendly-Name"] || "";
+  }
+  // Also check input if it's a Request object
+  if (!friendly && input instanceof Request) {
+    friendly = input.headers?.get("X-FB-Friendly-Name") || "";
+  }
+
+  if (url.includes("/api/graphql") || url.includes("/graphql")) {
+    pageLog("[FETCH] " + url.substring(0, 50) + " friendly=" + (friendly || "NONE"));
+  }
+
+  if (settings.blockDMRead && friendly.includes("MarkThreadAsReadValidation")) {
+    pageLog("BLOCKED DMRead validation (fetch)");
+    return Promise.resolve(new Response('{"data":{}}', { status: 200, headers: {"Content-Type": "application/json"} }));
   }
   return originalFetch.apply(this, arguments);
 };
