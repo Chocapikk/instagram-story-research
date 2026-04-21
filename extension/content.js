@@ -69,7 +69,7 @@ function togglePanel() {
   }
   panelFrame = document.createElement("iframe");
   panelFrame.src = browser.runtime.getURL("popup.html");
-  panelFrame.style.cssText = "position:fixed;top:8px;right:8px;width:390px;height:600px;z-index:999999;border:1px solid #30363d;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0d1117;";
+  panelFrame.style.cssText = "position:fixed;top:8px;right:8px;width:390px;height:600px;z-index:999999;border:1px solid #30363d;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0d1117;resize:both;overflow:auto;min-width:280px;min-height:300px;";
   document.body.appendChild(panelFrame);
 }
 
