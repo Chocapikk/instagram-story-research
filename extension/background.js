@@ -252,8 +252,12 @@ browser.webRequest.onBeforeRequest.addListener(
       }
     }
 
-    // DM read blocking is handled in onBeforeSendHeaders via X-FB-Friendly-Name header
-    // (the Validation mutation sends no parseable body)
+    // Block DM read validation (backup - also checked in onBeforeSendHeaders via header)
+    if (settings.blockDMRead && DM_READ_MUTATIONS.some(m => body.includes(m))) {
+      blockedCount++;
+      bglog("Blocked DMRead #" + blockedCount + " (via body)");
+      return { cancel: true };
+    }
 
     // Capture pagination template
     if (body.includes("PolarisStoriesV3ReelPageGalleryPaginationQuery")) {
