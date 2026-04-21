@@ -304,9 +304,9 @@ browser.webRequest.onBeforeSendHeaders.addListener(
     // Block DM read validation via header
     const friendlyName = headers["X-FB-Friendly-Name"] || "";
     if (friendlyName) bglog("[HDR] " + friendlyName + " from=" + (details.originUrl || "?").substring(0, 60) + " tabId=" + details.tabId);
-    if (settings.blockDMRead && friendlyName === "useIGDMarkThreadAsReadValidationMutation") {
+    if (settings.blockDMRead && friendlyName.includes("MarkThreadAsRead")) {
       blockedCount++;
-      bglog("Blocked DMRead #" + blockedCount);
+      bglog("Blocked DMRead #" + blockedCount + " (" + friendlyName + ")");
       pushStats();
       return { cancel: true };
     }
