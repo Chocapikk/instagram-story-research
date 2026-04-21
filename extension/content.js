@@ -59,8 +59,26 @@ function extractHeaders() {
   return { csrf: csrfVal, lsd };
 }
 
+// Floating panel
+let panelFrame = null;
+function togglePanel() {
+  if (panelFrame) {
+    panelFrame.remove();
+    panelFrame = null;
+    return;
+  }
+  panelFrame = document.createElement("iframe");
+  panelFrame.src = browser.runtime.getURL("popup.html");
+  panelFrame.style.cssText = "position:fixed;top:8px;right:8px;width:390px;height:600px;z-index:999999;border:1px solid #30363d;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0d1117;";
+  document.body.appendChild(panelFrame);
+}
+
 // Listen for on-demand extraction from background/popup
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "togglePanel") {
+    togglePanel();
+    sendResponse({ ok: true });
+  }
   if (msg.type === "extractTray") {
     const users = extractTrayUserIds();
     console.log("[IG Content] On-demand extraction:", users.length, "users");

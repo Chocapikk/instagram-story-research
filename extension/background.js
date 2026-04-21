@@ -730,4 +730,13 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
+// Toggle floating panel on browser action click
+browser.browserAction.onClicked.addListener((tab) => {
+  if (tab.url?.includes("instagram.com")) {
+    browser.tabs.sendMessage(tab.id, { type: "togglePanel" }).catch(_ => {});
+  } else {
+    browser.tabs.create({ url: "https://www.instagram.com/" });
+  }
+});
+
 bglog("Background loaded");

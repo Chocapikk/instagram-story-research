@@ -34,10 +34,8 @@
   "background": {
     "scripts": ["background.js"]
   },
-  "web_accessible_resources": ["inject.js", "stories.html", "stories.js"],
-  "browser_action": {
-    "default_popup": "popup.html"
-  },
+  "web_accessible_resources": ["inject.js", "stories.html", "stories.js", "popup.html", "popup.js"],
+  "browser_action": {},
   "sidebar_action": {
     "default_panel": "popup.html",
     "default_title": "IG Ghost Mode"
