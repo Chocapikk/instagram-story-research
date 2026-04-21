@@ -284,15 +284,25 @@ browser.webRequest.onBeforeRequest.addListener(
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     if (details.method !== "POST") return;
+    bglog("[HEADERS] " + details.url.substring(0, 60));
     const headers = {};
-    for (const h of details.requestHeaders) headers[h.name] = h.value;
+    const headerNames = [];
+    for (const h of details.requestHeaders) {
+      headers[h.name] = h.value;
+      headerNames.push(h.name);
+    }
     lastQueryHeaders = headers;
 
-    // Block DM read validation via X-FB-Friendly-Name header
     const friendlyName = headers["X-FB-Friendly-Name"] || "";
+    bglog("[HEADERS] friendly=" + (friendlyName || "NONE") + " | blockDMRead=" + settings.blockDMRead + " | allHeaders=" + headerNames.join(","));
+
+    if (friendlyName.includes("MarkThread")) {
+      bglog("[HEADERS] !!! DM READ DETECTED: " + friendlyName);
+    }
+
     if (settings.blockDMRead && friendlyName === "useIGDMarkThreadAsReadValidationMutation") {
       blockedCount++;
-      bglog("Blocked DMRead #" + blockedCount + " (via header)");
+      bglog("[HEADERS] BLOCKED DMRead #" + blockedCount);
       return { cancel: true };
     }
   },
