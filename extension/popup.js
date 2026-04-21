@@ -125,7 +125,7 @@ async function loadSettings() {
   log("Settings loaded");
 }
 
-document.getElementById("saveSettings").addEventListener("click", async () => {
+async function saveSettings() {
   const settings = {
     blockSeen: document.getElementById("blockSeen").checked,
     blockDMRead: document.getElementById("blockDMRead").checked,
@@ -137,7 +137,14 @@ document.getElementById("saveSettings").addEventListener("click", async () => {
   };
   await browser.runtime.sendMessage({ type: "saveSettings", settings });
   log("Settings saved");
-});
+}
+
+// Save on every toggle change
+for (const id of ["blockSeen", "blockDMRead", "blockTyping", "blockPresence", "autoFetch", "autoDownload"]) {
+  document.getElementById(id).addEventListener("change", saveSettings);
+}
+document.getElementById("interval").addEventListener("change", saveSettings);
+document.getElementById("saveSettings").addEventListener("click", saveSettings);
 
 // ---------------------------------------------------------------------------
 // Init
