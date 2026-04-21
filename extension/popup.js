@@ -64,13 +64,18 @@ document.getElementById("refresh").addEventListener("click", async () => {
   btn.textContent = "Fetching...";
   btn.disabled = true;
   await browser.runtime.sendMessage({ type: "triggerFetch" });
-  setTimeout(async () => {
+  const poll = setInterval(async () => {
     await syncLogs();
     await updateStats();
+  }, 1000);
+  setTimeout(() => {
+    clearInterval(poll);
+    updateStats();
+    syncLogs();
     btn.textContent = "\u21BB Refresh";
     btn.disabled = false;
     log("Refresh complete");
-  }, 3000);
+  }, 10000);
 });
 
 document.getElementById("viewStories").addEventListener("click", () => {
@@ -142,3 +147,6 @@ loadSettings();
 syncLogs();
 updateStats();
 log("Popup ready");
+
+// Auto-refresh stats and logs every second
+setInterval(() => { syncLogs(); updateStats(); }, 1000);
