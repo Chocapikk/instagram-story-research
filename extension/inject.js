@@ -7,7 +7,9 @@ window.__igResearchLoaded = true;
 let settings = { blockTyping: true, blockPresence: false, blockDMRead: true };
 
 window.addEventListener("ig_research_settings", (e) => {
-  if (e.detail) settings = { ...settings, ...e.detail };
+  try {
+    if (e.detail) settings = { ...settings, ...JSON.parse(JSON.stringify(e.detail)) };
+  } catch(_) {}
 });
 
 function pageLog(msg) {

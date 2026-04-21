@@ -92,13 +92,13 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Inject CRITICAL fetch/sendBeacon patches INLINE before any Instagram code runs
+// Inject CRITICAL fetch/sendBeacon patches using a blob URL to bypass CSP
 function injectEarlyPatches() {
   const code = `
     if (!window.__igEarlyPatch) {
       window.__igEarlyPatch = true;
       window.__igBlockDMRead = true;
-      const _fetch = window.fetch;
+      var _fetch = window.fetch;
       window.fetch = function(input, init) {
         if (window.__igBlockDMRead) {
           var h = init && init.headers;
@@ -128,10 +128,13 @@ function injectEarlyPatches() {
       }
     }
   `;
+  const blob = new Blob([code], { type: "application/javascript" });
+  const url = URL.createObjectURL(blob);
   const s = document.createElement("script");
-  s.textContent = code;
+  s.src = url;
   (document.documentElement || document).appendChild(s);
   s.remove();
+  URL.revokeObjectURL(url);
 }
 
 // Run immediately at document_start
@@ -182,11 +185,14 @@ if (document.readyState === "complete") {
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "pushSettings") {
     window.dispatchEvent(new CustomEvent("ig_research_settings", { detail: msg.settings }));
-    // Sync DM read setting with early patch
+    // Sync DM read setting with early patch via blob
+    const blob = new Blob(["window.__igBlockDMRead = " + !!msg.settings.blockDMRead + ";"], { type: "application/javascript" });
+    const burl = URL.createObjectURL(blob);
     const sync = document.createElement("script");
-    sync.textContent = "window.__igBlockDMRead = " + !!msg.settings.blockDMRead + ";";
+    sync.src = burl;
     document.documentElement.appendChild(sync);
     sync.remove();
+    URL.revokeObjectURL(burl);
     sendResponse({ ok: true });
   }
   return true;
