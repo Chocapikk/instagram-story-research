@@ -38,7 +38,8 @@ module.exports = [
         Chart: "readonly",
         MutationObserver: "readonly",
         navigator: "readonly",
-        Request: "readonly"
+        Request: "readonly",
+        exportFunction: "readonly"
       }
     },
     rules: {

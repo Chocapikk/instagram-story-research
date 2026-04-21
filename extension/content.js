@@ -92,53 +92,47 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Inject CRITICAL fetch/sendBeacon patches using a blob URL to bypass CSP
-function injectEarlyPatches() {
-  const code = `
-    if (!window.__igEarlyPatch) {
-      window.__igEarlyPatch = true;
-      window.__igBlockDMRead = true;
-      var _fetch = window.fetch;
-      window.fetch = function(input, init) {
-        if (window.__igBlockDMRead) {
-          var h = init && init.headers;
-          var fn = "";
-          if (h instanceof Headers) fn = h.get("X-FB-Friendly-Name") || "";
-          else if (h && typeof h === "object") fn = h["X-FB-Friendly-Name"] || "";
-          if (!fn && input instanceof Request) fn = input.headers.get("X-FB-Friendly-Name") || "";
-          if (fn === "useIGDMarkThreadAsReadValidationMutation") {
-            console.log("[IG Patch] Blocked DMRead validation (fetch)");
-            return Promise.resolve(new Response('{"data":{}}', {status:200}));
-          }
-        }
-        return _fetch.apply(this, arguments);
-      };
-      var _beacon = navigator.sendBeacon;
-      if (_beacon) {
-        navigator.sendBeacon = function(url, data) {
-          if (window.__igBlockDMRead && url && url.includes("/api/graphql")) {
-            var t = typeof data === "string" ? data : "";
-            if (t.includes("MarkThreadAsReadValidation")) {
-              console.log("[IG Patch] Blocked DMRead validation (beacon)");
-              return true;
-            }
-          }
-          return _beacon.apply(this, arguments);
-        };
+// Patch fetch/sendBeacon SYNCHRONOUSLY via wrappedJSObject (Firefox-only)
+// This runs at document_start before ANY Instagram code
+(function patchPageFetch() {
+  const pageWindow = window.wrappedJSObject;
+  if (!pageWindow || pageWindow.__igEarlyPatch) return;
+  pageWindow.__igEarlyPatch = true;
+  pageWindow.__igBlockDMRead = true;
+
+  const origFetch = pageWindow.fetch;
+  pageWindow.fetch = exportFunction(function(input, init) {
+    if (pageWindow.__igBlockDMRead) {
+      let fn = "";
+      if (init && init.headers) {
+        if (typeof init.headers.get === "function") fn = init.headers.get("X-FB-Friendly-Name") || "";
+        else if (typeof init.headers === "object") fn = init.headers["X-FB-Friendly-Name"] || "";
+      }
+      if (!fn && input && typeof input === "object" && input.headers && typeof input.headers.get === "function") {
+        fn = input.headers.get("X-FB-Friendly-Name") || "";
+      }
+      if (fn === "useIGDMarkThreadAsReadValidationMutation") {
+        console.log("[IG Patch] Blocked DMRead validation (fetch)");
+        return window.Promise.resolve(new window.Response('{"data":{}}', { status: 200 }));
       }
     }
-  `;
-  const blob = new Blob([code], { type: "application/javascript" });
-  const url = URL.createObjectURL(blob);
-  const s = document.createElement("script");
-  s.src = url;
-  (document.documentElement || document).appendChild(s);
-  s.remove();
-  URL.revokeObjectURL(url);
-}
+    return origFetch.apply(this, arguments);
+  }, pageWindow);
 
-// Run immediately at document_start
-injectEarlyPatches();
+  const origBeacon = pageWindow.navigator.sendBeacon;
+  pageWindow.navigator.sendBeacon = exportFunction(function(url, data) {
+    if (pageWindow.__igBlockDMRead && url && url.includes("/api/graphql")) {
+      const t = typeof data === "string" ? data : "";
+      if (t.includes("MarkThreadAsReadValidation")) {
+        console.log("[IG Patch] Blocked DMRead validation (beacon)");
+        return true;
+      }
+    }
+    return origBeacon.apply(this, arguments);
+  }, pageWindow.navigator);
+
+  console.log("[IG Patch] fetch + sendBeacon patched synchronously at document_start");
+})();
 
 // Inject full page-context script (MAIN world) for WebSocket/typing/presence
 function injectPageScript() {
@@ -185,14 +179,8 @@ if (document.readyState === "complete") {
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "pushSettings") {
     window.dispatchEvent(new CustomEvent("ig_research_settings", { detail: msg.settings }));
-    // Sync DM read setting with early patch via blob
-    const blob = new Blob(["window.__igBlockDMRead = " + !!msg.settings.blockDMRead + ";"], { type: "application/javascript" });
-    const burl = URL.createObjectURL(blob);
-    const sync = document.createElement("script");
-    sync.src = burl;
-    document.documentElement.appendChild(sync);
-    sync.remove();
-    URL.revokeObjectURL(burl);
+    // Sync DM read setting
+    window.wrappedJSObject.__igBlockDMRead = !!msg.settings.blockDMRead;
     sendResponse({ ok: true });
   }
   return true;
