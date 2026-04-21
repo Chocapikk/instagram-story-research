@@ -39,7 +39,8 @@ module.exports = [
         MutationObserver: "readonly",
         navigator: "readonly",
         Request: "readonly",
-        exportFunction: "readonly"
+        exportFunction: "readonly",
+        IntersectionObserver: "readonly"
       }
     },
     rules: {

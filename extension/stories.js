@@ -238,24 +238,26 @@ function buildCard(username, item) {
 
   if (item.url) {
     if (item.type === "video") {
-      const video = document.createElement("video");
-      video.src = item.url;
-      video.muted = true;
-      video.preload = "metadata";
-      video.addEventListener("loadeddata", () => { video.currentTime = 0.5; });
-      video.onerror = () => { video.remove(); preview.textContent = "\u25B6"; };
-      preview.appendChild(video);
+      // Show play icon instead of loading video - load on click only
+      const placeholder = document.createElement("div");
+      placeholder.style.cssText = "width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;color:#8b949e;background:#161b22;";
+      placeholder.textContent = "\u25B6";
+      preview.appendChild(placeholder);
 
       const overlay = document.createElement("div");
       overlay.className = "play-overlay";
-      overlay.textContent = "\u25B6";
+      overlay.textContent = "\u25B6 VID";
       preview.appendChild(overlay);
     } else {
       const img = document.createElement("img");
-      img.src = item.url;
       img.loading = "lazy";
       img.onerror = () => { img.remove(); preview.textContent = "\uD83D\uDCF7"; };
       preview.appendChild(img);
+      // Load image only when visible
+      const obs = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) { img.src = item.url; obs.disconnect(); }
+      });
+      obs.observe(preview);
     }
   } else {
     preview.textContent = item.type === "video" ? "\u25B6" : "\uD83D\uDCF7";
