@@ -380,6 +380,9 @@ function processStoryData(data) {
 
   // Detect purged stories: cached items that no longer appear in fresh server data
   const now2 = Math.floor(Date.now() / 1000);
+  const freshUserIds = new Set(reels.map(r => String(r.id || r.user?.id)).filter(Boolean));
+
+  // Case 1: user reel exists in response but some items are missing
   for (const reel of reels) {
     const userId = reel.id || reel.user?.id;
     if (!userId || !storyCache[userId]) continue;
@@ -388,12 +391,26 @@ function processStoryData(data) {
     for (const [mediaId, item] of Object.entries(storyCache[userId].items)) {
       if (item.deleted) continue;
       if (freshIds.has(String(mediaId))) continue;
-      // Item is in cache but not in fresh data - check if it should still be live
       if (item.expiring_at && now2 < item.expiring_at) {
-        // Not expired yet but missing from server = manually deleted (purged)
         item.deleted = true;
         item.deleted_at = Date.now();
         bglog("PURGED: " + storyCache[userId].username + " / " + mediaId);
+      }
+    }
+  }
+
+  // Case 2: user had stories in cache but entire reel is gone from response
+  // Only check if we got a meaningful response (at least 1 reel) to avoid false positives
+  if (reels.length > 0) {
+    for (const [userId, userData] of Object.entries(storyCache)) {
+      if (freshUserIds.has(String(userId))) continue;
+      for (const [mediaId, item] of Object.entries(userData.items)) {
+        if (item.deleted) continue;
+        if (item.expiring_at && now2 < item.expiring_at) {
+          item.deleted = true;
+          item.deleted_at = Date.now();
+          bglog("PURGED (reel gone): " + userData.username + " / " + mediaId);
+        }
       }
     }
   }
