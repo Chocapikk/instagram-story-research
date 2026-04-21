@@ -248,6 +248,9 @@ browser.webRequest.onBeforeRequest.addListener(
     }
 
     // Block DM read receipts (if enabled)
+    if (body.includes("MarkThreadAsRead")) {
+      bglog("DM read detected: " + (body.includes("Validation") ? "Validation" : "Local") + " | blockDMRead=" + settings.blockDMRead);
+    }
     if (settings.blockDMRead && DM_READ_MUTATIONS.some(m => body.includes(m))) {
       blockedCount++;
       bglog("Blocked DMRead #" + blockedCount);
