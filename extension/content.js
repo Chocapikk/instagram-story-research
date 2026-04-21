@@ -102,33 +102,39 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   const origFetch = pageWindow.fetch;
   pageWindow.fetch = exportFunction(function(input, init) {
-    if (pageWindow.__igBlockDMRead) {
-      let fn = "";
-      if (init && init.headers) {
-        if (typeof init.headers.get === "function") fn = init.headers.get("X-FB-Friendly-Name") || "";
-        else if (typeof init.headers === "object") fn = init.headers["X-FB-Friendly-Name"] || "";
+    try {
+      if (pageWindow.__igBlockDMRead) {
+        let fn = "";
+        try {
+          if (init && init.headers) {
+            if (typeof init.headers.get === "function") fn = init.headers.get("X-FB-Friendly-Name") || "";
+            else fn = init.headers["X-FB-Friendly-Name"] || "";
+          }
+          if (!fn && input && typeof input === "object" && input.headers) {
+            fn = input.headers.get("X-FB-Friendly-Name") || "";
+          }
+        } catch(_) {}
+        if (fn === "useIGDMarkThreadAsReadValidationMutation") {
+          console.log("[IG Patch] Blocked DMRead validation (fetch)");
+          return pageWindow.Promise.resolve(new pageWindow.Response('{"data":{}}', { status: 200 }));
+        }
       }
-      if (!fn && input && typeof input === "object" && input.headers && typeof input.headers.get === "function") {
-        fn = input.headers.get("X-FB-Friendly-Name") || "";
-      }
-      if (fn === "useIGDMarkThreadAsReadValidationMutation") {
-        console.log("[IG Patch] Blocked DMRead validation (fetch)");
-        return window.Promise.resolve(new window.Response('{"data":{}}', { status: 200 }));
-      }
-    }
-    return origFetch.apply(this, arguments);
+    } catch(_) {}
+    return origFetch.call(this, input, init);
   }, pageWindow);
 
   const origBeacon = pageWindow.navigator.sendBeacon;
   pageWindow.navigator.sendBeacon = exportFunction(function(url, data) {
-    if (pageWindow.__igBlockDMRead && url && url.includes("/api/graphql")) {
-      const t = typeof data === "string" ? data : "";
-      if (t.includes("MarkThreadAsReadValidation")) {
-        console.log("[IG Patch] Blocked DMRead validation (beacon)");
-        return true;
+    try {
+      if (pageWindow.__igBlockDMRead && url && url.includes("/api/graphql")) {
+        const t = typeof data === "string" ? data : "";
+        if (t.includes("MarkThreadAsReadValidation")) {
+          console.log("[IG Patch] Blocked DMRead validation (beacon)");
+          return true;
+        }
       }
-    }
-    return origBeacon.apply(this, arguments);
+    } catch(_) {}
+    return origBeacon.call(this, url, data);
   }, pageWindow.navigator);
 
   console.log("[IG Patch] fetch + sendBeacon patched synchronously at document_start");
