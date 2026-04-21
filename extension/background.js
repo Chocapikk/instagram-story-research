@@ -378,6 +378,26 @@ function processStoryData(data) {
     }
   }
 
+  // Detect purged stories: cached items that no longer appear in fresh server data
+  const now2 = Math.floor(Date.now() / 1000);
+  for (const reel of reels) {
+    const userId = reel.id || reel.user?.id;
+    if (!userId || !storyCache[userId]) continue;
+    const freshIds = new Set((reel.items || reel.media || []).map(i => String(i.id || i.pk)).filter(Boolean));
+    if (freshIds.size === 0) continue;
+    for (const [mediaId, item] of Object.entries(storyCache[userId].items)) {
+      if (item.deleted) continue;
+      if (freshIds.has(String(mediaId))) continue;
+      // Item is in cache but not in fresh data - check if it should still be live
+      if (item.expiring_at && now2 < item.expiring_at) {
+        // Not expired yet but missing from server = manually deleted (purged)
+        item.deleted = true;
+        item.deleted_at = Date.now();
+        bglog("PURGED: " + storyCache[userId].username + " / " + mediaId);
+      }
+    }
+  }
+
   // Trigger pagination for missing users
   const cachedIds = new Set(Object.keys(storyCache));
   const missing = allReelIds.filter(id => !cachedIds.has(String(id)));
