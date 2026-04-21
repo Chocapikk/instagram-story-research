@@ -77,20 +77,19 @@ WebSocket.prototype.send = function(data) {
     else if (typeof data === "string") fullText = data;
   } catch(_) {}
 
-  // Log outgoing WS messages that contain read/thread/mark keywords
-  if (fullText && (fullText.includes("read") || fullText.includes("mark_thread") || fullText.includes("seen"))) {
-    // Extract context around keywords
-    const keywords = ["mark_thread", "mark_read", "thread_read", "read_receipt", "markAsRead", "MarkAsRead", "markRead", "MarkRead", "lastReadWatermark", "read_watermark", "read_action"];
-    const found = keywords.filter(k => fullText.includes(k));
-    // Also find all occurrences of "read" with surrounding context
-    const readContexts = [];
-    let idx = 0;
-    while ((idx = fullText.indexOf("read", idx)) !== -1) {
-      readContexts.push(fullText.substring(Math.max(0, idx - 20), Math.min(fullText.length, idx + 30)).replace(/[^\x20-\x7E]/g, "."));
-      idx += 4;
-      if (readContexts.length > 5) break;
+  // Debug: dump readable strings from WS frames containing "read" or "mark"
+  if (fullText && (fullText.includes("read") || fullText.includes("mark"))) {
+    // Extract all readable ASCII sequences (4+ chars) from the binary frame
+    const strings = [];
+    let current = "";
+    for (let i = 0; i < fullText.length; i++) {
+      const c = fullText.charCodeAt(i);
+      if (c >= 32 && c <= 126) current += fullText[i];
+      else { if (current.length >= 4) strings.push(current); current = ""; }
     }
-    pageLog("[WS OUT] len=" + fullText.length + " markers=[" + found.join(",") + "] contexts=" + JSON.stringify(readContexts));
+    if (current.length >= 4) strings.push(current);
+    const relevant = strings.filter(s => s.includes("read") || s.includes("mark") || s.includes("thread") || s.includes("seen"));
+    pageLog("[WS OUT] len=" + fullText.length + " strings=" + JSON.stringify(relevant));
   }
 
   const text = decodeFrame(data);
